@@ -1,0 +1,1 @@
+# ShopSmart Database Package
