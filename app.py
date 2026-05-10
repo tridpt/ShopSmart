@@ -4,6 +4,10 @@ ShopSmart AI — Flask API Server
 import os
 import sys
 
+# Fix Windows console encoding for Vietnamese text
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 # Ensure project root is in path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -77,7 +81,13 @@ def chat():
             "error": str(e),
         }), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "response": f"Loi: {str(e)}",
+            "tool_calls": [],
+            "error": str(e),
+        }), 200
 
 
 @app.route("/api/chat/history", methods=["GET"])

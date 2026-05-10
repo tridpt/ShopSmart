@@ -21,27 +21,8 @@ TOOL_FUNCTIONS = {
     "send_notification": notifier.send_notification,
 }
 
-# Collect all tool definitions for Gemini
-_ALL_TOOL_DEFS = []
-_ALL_TOOL_DEFS.append(web_search.TOOL_DEFINITION)
-_ALL_TOOL_DEFS.append(price_scraper.TOOL_DEFINITION)
-_ALL_TOOL_DEFS.extend(price_tracker.TOOL_DEFINITIONS)
-_ALL_TOOL_DEFS.append(price_analyzer.TOOL_DEFINITION)
-_ALL_TOOL_DEFS.append(notifier.TOOL_DEFINITION)
-
-
-def _build_gemini_tools():
-    """Convert tool definitions to Gemini-compatible format."""
-    declarations = []
-    for td in _ALL_TOOL_DEFS:
-        declarations.append(
-            genai.protos.FunctionDeclaration(
-                name=td["name"],
-                description=td["description"],
-                parameters=td["parameters"],
-            )
-        )
-    return genai.protos.Tool(function_declarations=declarations)
+# Pass callables directly — Gemini SDK auto-generates schema from type hints
+_TOOL_CALLABLES = list(TOOL_FUNCTIONS.values())
 
 
 class ShopSmartAgent:
@@ -50,15 +31,15 @@ class ShopSmartAgent:
     def __init__(self):
         if not config.GEMINI_API_KEY:
             raise ValueError(
-                "GEMINI_API_KEY chưa được cấu hình! "
-                "Hãy set biến môi trường GEMINI_API_KEY."
+                "GEMINI_API_KEY not configured! "
+                "Set environment variable GEMINI_API_KEY."
             )
 
         genai.configure(api_key=config.GEMINI_API_KEY)
 
         self.model = genai.GenerativeModel(
             model_name=config.GEMINI_MODEL,
-            tools=[_build_gemini_tools()],
+            tools=_TOOL_CALLABLES,
             system_instruction=SYSTEM_PROMPT,
         )
         self.chat = self.model.start_chat()
@@ -90,7 +71,7 @@ class ShopSmartAgent:
                 function_responses = []
 
                 for part in response.parts:
-                    if part.function_call:
+                    if hasattr(part, 'function_call') and part.function_call.name:
                         has_function_call = True
                         fc = part.function_call
                         fn_name = fc.name
@@ -128,11 +109,11 @@ class ShopSmartAgent:
             # Extract final text response
             final_text = ""
             for part in response.parts:
-                if part.text:
+                if hasattr(part, 'text') and part.text:
                     final_text += part.text
 
             if not final_text:
-                final_text = "Xin lỗi, tôi không thể xử lý yêu cầu này. Vui lòng thử lại."
+                final_text = "Xin loi, toi khong the xu ly yeu cau nay. Vui long thu lai."
 
             return {
                 "response": final_text,
@@ -144,16 +125,22 @@ class ShopSmartAgent:
             traceback.print_exc()
             error_msg = str(e)
 
-            # Handle common errors gracefully
             if "API_KEY" in error_msg.upper() or "authentication" in error_msg.lower():
                 return {
-                    "response": "❌ Lỗi API Key! Hãy kiểm tra lại GEMINI_API_KEY.",
+                    "response": "Loi API Key! Hay kiem tra lai GEMINI_API_KEY.",
+                    "tool_calls": tool_calls,
+                    "error": error_msg,
+                }
+
+            if "quota" in error_msg.lower() or "429" in error_msg:
+                return {
+                    "response": "API da het quota. Vui long doi vai phut hoac tao API key moi tai https://aistudio.google.com/apikey",
                     "tool_calls": tool_calls,
                     "error": error_msg,
                 }
 
             return {
-                "response": f"❌ Đã xảy ra lỗi: {error_msg}",
+                "response": f"Da xay ra loi: {error_msg}",
                 "tool_calls": tool_calls,
                 "error": error_msg,
             }
@@ -164,19 +151,18 @@ class ShopSmartAgent:
         if not fn:
             return json.dumps({
                 "success": False,
-                "message": f"Tool '{name}' không tồn tại."
+                "message": f"Tool '{name}' does not exist."
             })
 
         try:
             return fn(**args)
         except TypeError as e:
-            # Handle argument mismatch
             return json.dumps({
                 "success": False,
-                "message": f"Lỗi tham số cho tool '{name}': {str(e)}"
+                "message": f"Argument error for tool '{name}': {str(e)}"
             })
         except Exception as e:
             return json.dumps({
                 "success": False,
-                "message": f"Lỗi thực thi tool '{name}': {str(e)}"
+                "message": f"Error executing tool '{name}': {str(e)}"
             })

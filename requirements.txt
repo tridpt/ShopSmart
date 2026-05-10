@@ -4,4 +4,4 @@ google-generativeai>=0.8
 requests>=2.31
 beautifulsoup4>=4.12
 lxml>=5.0
-duckduckgo-search>=7.0
+ddgs>=9.0
