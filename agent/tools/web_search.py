@@ -20,43 +20,135 @@ ECOMMERCE_SITES = [
     {"name": "Hnam Mobile", "domain": "hnammobile.com", "icon": "hnam"},
 ]
 
+# Words that indicate a number is NOT a product price
+_DISCOUNT_KEYWORDS = [
+    'giảm', 'giam', 'tiết kiệm', 'tiet kiem', 'khuyến mãi', 'khuyen mai',
+    'ưu đãi', 'uu dai', 'trả góp', 'tra gop', 'hoàn', 'hoan', 'voucher',
+    'coupon', 'mã giảm', 'ma giam', 'chiết khấu', 'chiet khau', 'giảm đến',
+    'giảm còn', 'giảm liền', 'giảm thêm', 'giảm sốc', 'giảm mạnh',
+    'off', 'discount', 'save', 'freeship',
+    'trả chậm', 'tra cham', 'tháng', 'thang', '/tháng', 'góp', 'gop',
+    'trả trước', 'tra truoc', 'đặt cọc', 'dat coc', 'chỉ từ', 'chi tu',
+    'chỉ còn', 'chi con', 'tiền mặt', 'tien mat',
+    'bảng giá', 'bang gia', 'cập nhật', 'cap nhat', 'mới nhất', 'moi nhat',
+]
 
-def _extract_prices_from_text(text: str) -> list[float]:
-    """Extract VND prices from text using common patterns."""
-    prices = []
+# URLs that are blog/article pages (not product pages) — prices are unreliable
+_BLOG_URL_PATTERNS = [
+    r'/tin-tuc/', r'/bai-viet/', r'/blog/', r'/news/',
+    r'/bang-gia', r'/gia-ban', r'/cap-nhat-gia',
+    r'/top-\d+', r'/so-sanh', r'/danh-gia', r'/review',
+]
+
+
+def _is_product_page_url(url: str) -> bool:
+    """Check if URL is a direct product page (not blog/article)."""
+    product_patterns = [
+        r'shopee\.vn/.*-i\.\d+\.\d+',           # Shopee product
+        r'tiki\.vn/.*p\d+',                       # Tiki product
+        r'lazada\.vn/products/',                   # Lazada product
+        r'cellphones\.com\.vn/.*\.html',           # CellphoneS product
+        r'fptshop\.com\.vn/.+/.*\.html',           # FPT Shop product
+        r'thegioididong\.com/.+',                  # TGDD product
+        r'dienmayxanh\.com/.+',                    # DMX product
+    ]
+    for pattern in product_patterns:
+        if re.search(pattern, url):
+            return True
+    return False
+
+
+def _extract_product_price(text: str) -> float | None:
+    """
+    Extract the ACTUAL product price from text, filtering out discounts.
+    Returns None if no confident price found.
+    """
     if not text:
-        return prices
+        return None
 
-    # Pattern: 1.234.567đ or 1,234,567đ or 1.234.567 VND
-    patterns = [
-        r'(\d{1,3}(?:\.\d{3})+)\s*(?:đ|₫|VND|vnđ|dong)',
-        r'(\d{1,3}(?:,\d{3})+)\s*(?:đ|₫|VND|vnđ|dong)',
-        r'(\d{1,3}(?:\.\d{3})+)(?:\s|$)',
-        # Pattern: 25tr, 25.9tr (triệu)
-        r'(\d+(?:[.,]\d+)?)\s*(?:tr(?:iệu)?|trieu)',
+    text_lower = text.lower()
+
+    # Strategy 1: Look for explicit price patterns like "giá: 25.990.000đ" or "giá từ 25.990.000"
+    explicit_patterns = [
+        r'giá\s*(?:từ|chỉ|còn|:)?\s*(\d{1,3}(?:\.\d{3})+)\s*(?:đ|₫|VND|vnđ|d)',
+        r'giá\s*(?:từ|chỉ|còn|:)?\s*(\d{1,3}(?:\.\d{3})+)',
+        r'giá\s*(?:từ|chỉ|còn|:)?\s*(\d+(?:[.,]\d+)?)\s*(?:triệu|trieu|tr)\b',
     ]
 
-    for pattern in patterns:
+    for pattern in explicit_patterns:
         matches = re.findall(pattern, text, re.IGNORECASE)
         for match in matches:
-            try:
-                cleaned = match.replace('.', '').replace(',', '')
-                value = float(cleaned)
-                # Check if it was in "trieu" (millions)
-                if 'tr' in pattern.lower():
-                    value = value * 1_000_000
-                # Sanity check: reasonable price range (10k - 500M VND)
-                if 10_000 <= value <= 500_000_000:
-                    prices.append(value)
-            except (ValueError, TypeError):
-                continue
+            price = _parse_price_value(match, 'tr' in pattern.lower())
+            if price and _is_reasonable_price(price):
+                return price
 
-    return prices
+    # Strategy 2: Look for standalone prices with VND suffix (high confidence)
+    vnd_pattern = r'(\d{1,3}(?:\.\d{3}){1,3})\s*(?:đ|₫|VND|vnđ)\b'
+    vnd_matches = re.finditer(vnd_pattern, text, re.IGNORECASE)
+
+    valid_prices = []
+    for m in vnd_matches:
+        price_str = m.group(1)
+        # Check surrounding context — is this near a discount word?
+        start = max(0, m.start() - 40)
+        context_before = text_lower[start:m.start()]
+
+        is_discount = any(kw in context_before for kw in _DISCOUNT_KEYWORDS)
+        if is_discount:
+            continue
+
+        price = _parse_price_value(price_str, False)
+        if price and _is_reasonable_price(price):
+            valid_prices.append(price)
+
+    if valid_prices:
+        # Return the most likely product price (highest among valid ones,
+        # since discounts tend to be smaller numbers)
+        return max(valid_prices)
+
+    # Strategy 3: Look for "XX triệu" pattern with context
+    tr_pattern = r'(\d+(?:[.,]\d+)?)\s*(?:triệu|trieu|tr)\b'
+    tr_matches = re.finditer(tr_pattern, text, re.IGNORECASE)
+
+    for m in tr_matches:
+        start = max(0, m.start() - 40)
+        context_before = text_lower[start:m.start()]
+        is_discount = any(kw in context_before for kw in _DISCOUNT_KEYWORDS)
+        if is_discount:
+            continue
+
+        price = _parse_price_value(m.group(1), True)
+        if price and _is_reasonable_price(price):
+            valid_prices.append(price)
+
+    if valid_prices:
+        return max(valid_prices)
+
+    return None
+
+
+def _parse_price_value(price_str: str, is_millions: bool) -> float | None:
+    """Parse a price string to float value."""
+    try:
+        cleaned = price_str.replace('.', '').replace(',', '')
+        value = float(cleaned)
+        if is_millions:
+            # Handle "25" or "25.9" or "259"
+            if value < 1000:
+                value = value * 1_000_000
+        return value
+    except (ValueError, TypeError):
+        return None
+
+
+def _is_reasonable_price(price: float) -> bool:
+    """Check if a price is in a reasonable range for Vietnamese products."""
+    # Min 50,000 VND (~$2), Max 500,000,000 VND (~$20,000)
+    return 50_000 <= price <= 500_000_000
 
 
 def _clean_title(title: str) -> str:
     """Clean up product title from search results."""
-    # Remove common suffixes/prefixes
     removals = [
         r'\s*[-|]\s*Shopee\s*.*$',
         r'\s*[-|]\s*Tiki\s*.*$',
@@ -80,6 +172,11 @@ def _identify_source(url: str) -> str:
         if site["domain"] in url:
             return site["name"]
     return "Web"
+
+
+def _format_price(price: float) -> str:
+    """Format price with dots as thousands separator."""
+    return f"{price:,.0f}d".replace(",", ".")
 
 
 def search_product(query: str, max_results: int = 10) -> str:
@@ -112,10 +209,17 @@ def search_product(query: str, max_results: int = 10) -> str:
                         title = r.get("title", "")
                         snippet = r.get("body", "")
 
-                        # Extract price from title + snippet
-                        combined_text = f"{title} {snippet}"
-                        prices = _extract_prices_from_text(combined_text)
-                        price = min(prices) if prices else None
+                        # Skip price extraction for blog/article URLs (prices are unreliable)
+                        is_blog = any(re.search(p, url, re.IGNORECASE) for p in _BLOG_URL_PATTERNS)
+
+                        price = None
+                        if not is_blog:
+                            # Only extract price from snippet (not title — title often has discount amounts)
+                            price = _extract_product_price(snippet)
+
+                            # If no price from snippet, try title only for product pages
+                            if price is None and _is_product_page_url(url):
+                                price = _extract_product_price(title)
 
                         source = _identify_source(url)
                         clean = _clean_title(title)
@@ -124,7 +228,7 @@ def search_product(query: str, max_results: int = 10) -> str:
                             all_results.append({
                                 "product_name": clean,
                                 "price": price,
-                                "price_formatted": f"{price:,.0f}d".replace(",", ".") if price else None,
+                                "price_formatted": _format_price(price) if price else None,
                                 "url": url,
                                 "source": source,
                                 "snippet": snippet[:150],
@@ -145,18 +249,22 @@ def search_product(query: str, max_results: int = 10) -> str:
                         title = r.get("title", "")
                         snippet = r.get("body", "")
 
-                        prices = _extract_prices_from_text(f"{title} {snippet}")
-                        price = min(prices) if prices else None
+                        is_blog = any(re.search(p, url, re.IGNORECASE) for p in _BLOG_URL_PATTERNS)
+                        price = None
+                        if not is_blog:
+                            price = _extract_product_price(snippet)
+                            if price is None and _is_product_page_url(url):
+                                price = _extract_product_price(title)
+
                         source = _identify_source(url)
                         clean = _clean_title(title)
 
-                        # Avoid duplicates
                         existing_urls = {x["url"] for x in all_results}
                         if clean and url not in existing_urls:
                             all_results.append({
                                 "product_name": clean,
                                 "price": price,
-                                "price_formatted": f"{price:,.0f}d".replace(",", ".") if price else None,
+                                "price_formatted": _format_price(price) if price else None,
                                 "url": url,
                                 "source": source,
                                 "snippet": snippet[:150],
@@ -188,8 +296,8 @@ def search_product(query: str, max_results: int = 10) -> str:
             summary = {
                 "lowest_price": min(prices_found),
                 "highest_price": max(prices_found),
-                "lowest_formatted": f"{min(prices_found):,.0f}d".replace(",", "."),
-                "highest_formatted": f"{max(prices_found):,.0f}d".replace(",", "."),
+                "lowest_formatted": _format_price(min(prices_found)),
+                "highest_formatted": _format_price(max(prices_found)),
                 "sources_found": list(set(r["source"] for r in sorted_results)),
             }
 
