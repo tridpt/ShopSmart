@@ -82,7 +82,7 @@
 .product-price { font-size: 1.2rem; font-weight: 800; color: var(--accent-coral); }
 .product-price.no-price { font-size: 0.85rem; color: var(--text-muted); font-weight: 400; }
 
-.product-actions { display: flex; gap: 8px; }
+.product-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .btn-visit {
     padding: 8px 16px; background: var(--gradient-primary); border: none;
     border-radius: var(--radius-sm); color: white; font-family: var(--font-family);
@@ -91,6 +91,28 @@
     display: inline-flex; align-items: center; gap: 6px;
 }
 .btn-visit:hover { transform: scale(1.03); box-shadow: var(--shadow-glow); }
+
+.btn-check-price {
+    padding: 8px 16px; background: rgba(46,204,113,0.15);
+    border: 1px solid rgba(46,204,113,0.3); border-radius: var(--radius-sm);
+    color: #2ECC71; font-family: var(--font-family);
+    font-size: 0.78rem; font-weight: 600; cursor: pointer;
+    transition: all var(--transition-normal);
+    display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-check-price:hover { background: rgba(46,204,113,0.25); transform: scale(1.03); }
+.btn-check-price:disabled { opacity: 0.6; cursor: wait; }
+
+.product-price-display { min-height: 0; }
+.product-price-display .product-price {
+    font-size: 1.3rem; font-weight: 800; color: var(--accent-coral);
+    animation: fadeInUp 0.3s ease;
+}
+.product-price-display .product-price.no-price {
+    font-size: 0.8rem; color: var(--text-muted); font-weight: 400;
+}
+
+.product-source-badge.hnam { background: rgba(0,150,136,0.15); color: #009688; }
 
 /* Loading skeleton */
 .product-skeleton {

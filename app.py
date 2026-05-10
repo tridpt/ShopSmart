@@ -197,6 +197,31 @@ def direct_search():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ── Price Scraper API (no AI needed) ─────────────────────────
+@app.route("/api/scrape-price", methods=["POST"])
+def scrape_price_api():
+    """Scrape real price from a product URL."""
+    try:
+        from agent.tools.price_scraper import scrape_price
+        import json as _json
+
+        data = request.get_json()
+        url = data.get("url", "").strip() if data else ""
+        if not url:
+            return jsonify({"error": "URL is required"}), 400
+
+        result_json = scrape_price(url)
+        result = _json.loads(result_json)
+
+        # Format price for display
+        if result.get("price"):
+            price = result["price"]
+            result["price_formatted"] = f"{price:,.0f}đ".replace(",", ".")
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # ── Health Check ─────────────────────────────────────────────
 @app.route("/api/health", methods=["GET"])
 def health():
