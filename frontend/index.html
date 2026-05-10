@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="css/chat.css">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/animations.css">
+    <link rel="stylesheet" href="css/search.css">
 </head>
 <body>
     <!-- ── Sidebar ─────────────────────────────────── -->
@@ -33,6 +34,10 @@
             <button class="nav-item active" data-view="chat" id="nav-chat">
                 <i class="fas fa-comments"></i>
                 <span>Chat AI</span>
+            </button>
+            <button class="nav-item" data-view="search" id="nav-search">
+                <i class="fas fa-search"></i>
+                <span>Tìm Kiếm</span>
             </button>
             <button class="nav-item" data-view="dashboard" id="nav-dashboard">
                 <i class="fas fa-chart-line"></i>
@@ -110,6 +115,43 @@
                 </div>
                 <div class="input-hint">
                     <span>Nhấn <kbd>Enter</kbd> để gửi · <kbd>Shift+Enter</kbd> để xuống dòng</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══ Search View (NO AI needed) ══════════ -->
+        <section id="view-search" class="view">
+            <header class="view-header">
+                <div class="header-left">
+                    <button class="menu-toggle" id="menu-toggle-search">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2><i class="fas fa-search"></i> Tìm Kiếm Sản Phẩm</h2>
+                </div>
+            </header>
+
+            <div class="search-content">
+                <div class="search-bar">
+                    <div class="search-input-wrapper">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" id="search-input" placeholder="Nhập tên sản phẩm... (vd: iPhone 16, tai nghe bluetooth, laptop gaming)">
+                        <button id="btn-search" class="btn-search">Tìm kiếm</button>
+                    </div>
+                    <div class="search-tags">
+                        <button class="search-tag" data-q="iPhone 16 Pro Max">iPhone 16 Pro Max</button>
+                        <button class="search-tag" data-q="tai nghe bluetooth">Tai nghe BT</button>
+                        <button class="search-tag" data-q="laptop gaming">Laptop Gaming</button>
+                        <button class="search-tag" data-q="samsung galaxy s25">Galaxy S25</button>
+                        <button class="search-tag" data-q="máy hút bụi robot">Robot hút bụi</button>
+                    </div>
+                </div>
+                <div id="search-status" class="search-status" style="display:none"></div>
+                <div id="search-results" class="search-results">
+                    <div class="empty-state">
+                        <i class="fas fa-search"></i>
+                        <h3>Tìm kiếm trực tiếp</h3>
+                        <p>Không cần API key! Tìm sản phẩm từ Shopee, Tiki, Lazada, CellphoneS, FPT Shop...</p>
+                    </div>
                 </div>
             </div>
         </section>
@@ -240,6 +282,7 @@
     <script src="js/chat.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/notifications.js"></script>
+    <script src="js/search.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

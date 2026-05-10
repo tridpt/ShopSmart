@@ -180,6 +180,23 @@ def mark_notifications_read():
         return jsonify({"error": str(e)}), 500
 
 
+# ── Direct Search API (no AI needed) ────────────────────────
+@app.route("/api/search", methods=["GET"])
+def direct_search():
+    """Search products directly without Gemini AI."""
+    try:
+        from agent.tools.web_search import search_product
+        query = request.args.get("q", "").strip()
+        if not query:
+            return jsonify({"error": "Query parameter 'q' is required"}), 400
+
+        result_json = search_product(query, max_results=12)
+        import json
+        result = json.loads(result_json)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # ── Health Check ─────────────────────────────────────────────
 @app.route("/api/health", methods=["GET"])
 def health():

@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     Chat.init();
     Dashboard.init();
     Notifications.init();
+    Search.init();
 
     // Health check
     checkApiStatus();
