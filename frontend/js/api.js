@@ -40,6 +40,7 @@ const API = {
     deleteTracked: (id) => API.del(`/api/tracked/${id}`),
     updateTarget: (id, price) => API.put(`/api/tracked/${id}/target`, { target_price: price }),
     getPriceHistory: (id) => API.get(`/api/price-history/${id}`),
+    refreshPrices: () => API.post('/api/refresh-prices'),
     getNotifications: () => API.get('/api/notifications'),
     markNotificationsRead: () => API.post('/api/notifications/read'),
     healthCheck: () => API.get('/api/health'),

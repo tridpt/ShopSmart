@@ -34,3 +34,13 @@ FLASK_DEBUG = _env_bool("FLASK_DEBUG", False)
 
 # ── Agent ───────────────────────────────────────────────────
 MAX_AGENT_ITERATIONS = 10
+
+# ── Price Monitor (background auto-update) ──────────────────
+# Bật/tắt việc tự động cập nhật giá sản phẩm đang theo dõi.
+PRICE_MONITOR_ENABLED = _env_bool("PRICE_MONITOR_ENABLED", True)
+# Khoảng thời gian giữa các lần quét (giây). Mặc định 6 giờ.
+PRICE_MONITOR_INTERVAL = int(os.environ.get("PRICE_MONITOR_INTERVAL", str(6 * 60 * 60)))
+# Đợi bao lâu sau khi khởi động mới quét lần đầu (giây).
+PRICE_MONITOR_INITIAL_DELAY = int(os.environ.get("PRICE_MONITOR_INITIAL_DELAY", "60"))
+# Khoảng nghỉ giữa các lần scrape từng sản phẩm (giây) để tránh bị chặn.
+PRICE_MONITOR_PER_ITEM_DELAY = float(os.environ.get("PRICE_MONITOR_PER_ITEM_DELAY", "3"))

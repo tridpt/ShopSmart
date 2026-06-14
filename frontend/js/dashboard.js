@@ -5,7 +5,37 @@ const Dashboard = {
     chart: null,
 
     init() {
+        const refreshBtn = document.getElementById('btn-refresh-prices');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => this.refreshPrices());
+        }
         this.refresh();
+    },
+
+    async refreshPrices() {
+        const btn = document.getElementById('btn-refresh-prices');
+        const icon = btn ? btn.querySelector('i') : null;
+        if (btn) btn.disabled = true;
+        if (icon) icon.classList.add('fa-spin');
+        try {
+            const data = await API.refreshPrices();
+            if (data && data.success) {
+                const n = data.updated || 0;
+                alert(n > 0
+                    ? `Đã cập nhật giá cho ${n} sản phẩm.`
+                    : 'Đã kiểm tra xong. Không có sản phẩm nào đổi giá.');
+            } else {
+                alert('Không thể làm mới giá: ' + ((data && data.error) || 'lỗi không xác định'));
+            }
+            this.refresh();
+            if (typeof Notifications !== 'undefined') Notifications.refresh();
+        } catch (e) {
+            console.error('Refresh prices error:', e);
+            alert('Lỗi kết nối khi làm mới giá.');
+        } finally {
+            if (btn) btn.disabled = false;
+            if (icon) icon.classList.remove('fa-spin');
+        }
     },
 
     async refresh() {

@@ -2,6 +2,7 @@
 ShopSmart AI — Flask API Server
 """
 import os
+import re
 import sys
 
 # Fix Windows console encoding for Vietnamese text
@@ -18,6 +19,7 @@ import config
 from database.db import init_db
 from database.models import Product, PriceHistory, Notification, ChatHistory
 from agent.core import ShopSmartAgent
+from agent import price_monitor
 
 # ── Flask App ───────────────────────────────────────────────
 app = Flask(
@@ -29,6 +31,7 @@ CORS(app)
 
 # ── Initialize ──────────────────────────────────────────────
 init_db()
+price_monitor.start_monitor()
 agent = None
 
 
@@ -138,8 +141,22 @@ def delete_tracked(product_id):
 def update_target(product_id):
     """Update target price for a tracked product."""
     try:
-        data = request.get_json()
+        # Make sure the product exists.
+        if not Product.get_by_id(product_id):
+            return jsonify({"error": "Product not found"}), 404
+
+        data = request.get_json(silent=True) or {}
         target = data.get("target_price")
+
+        # Validate: must be a positive number (or null to clear the target).
+        if target is not None:
+            try:
+                target = float(target)
+            except (TypeError, ValueError):
+                return jsonify({"error": "target_price must be a number"}), 400
+            if target <= 0:
+                return jsonify({"error": "target_price must be greater than 0"}), 400
+
         Product.update_target_price(product_id, target)
         return jsonify({"success": True})
     except Exception as e:
@@ -180,6 +197,17 @@ def mark_notifications_read():
         return jsonify({"error": str(e)}), 500
 
 
+# ── Price Monitor API ────────────────────────────────────────
+@app.route("/api/refresh-prices", methods=["POST"])
+def refresh_prices():
+    """Trigger an immediate price re-check for all tracked products."""
+    try:
+        updated = price_monitor.run_once()
+        return jsonify({"success": True, "updated": updated})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ── Direct Search API (no AI needed) ────────────────────────
 @app.route("/api/search", methods=["GET"])
 def direct_search():
@@ -205,10 +233,12 @@ def scrape_price_api():
         from agent.tools.price_scraper import scrape_price
         import json as _json
 
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         url = data.get("url", "").strip() if data else ""
         if not url:
             return jsonify({"error": "URL is required"}), 400
+        if not re.match(r"^https?://", url, re.IGNORECASE):
+            return jsonify({"error": "URL must start with http:// or https://"}), 400
 
         result_json = scrape_price(url)
         result = _json.loads(result_json)
