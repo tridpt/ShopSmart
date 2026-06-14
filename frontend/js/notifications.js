@@ -46,13 +46,17 @@ const Notifications = {
                         </div>
                     </div>`;
             }).join('');
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+            console.warn('Notifications.refresh failed:', e);
+        }
     },
 
     async markAllRead() {
         try {
             await API.markNotificationsRead();
             this.refresh();
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+            console.error('Notifications.markAllRead failed:', e);
+        }
     }
 };

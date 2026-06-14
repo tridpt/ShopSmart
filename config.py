@@ -20,9 +20,17 @@ DATABASE_PATH = os.path.join(
 )
 
 # ── Flask ───────────────────────────────────────────────────
-FLASK_HOST = "127.0.0.1"
-FLASK_PORT = 5000
-FLASK_DEBUG = True
+def _env_bool(key: str, default: bool) -> bool:
+    val = os.environ.get(key)
+    if val is None:
+        return default
+    return val.strip().lower() in ("1", "true", "yes", "on")
+
+
+FLASK_HOST = os.environ.get("FLASK_HOST", "127.0.0.1")
+FLASK_PORT = int(os.environ.get("FLASK_PORT", "5000"))
+# Debug defaults to OFF for safety; enable explicitly via FLASK_DEBUG=true.
+FLASK_DEBUG = _env_bool("FLASK_DEBUG", False)
 
 # ── Agent ───────────────────────────────────────────────────
 MAX_AGENT_ITERATIONS = 10

@@ -38,7 +38,9 @@ const Dashboard = {
 
             // Update tracking list
             this.updateTrackingList(products);
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+            console.warn('Dashboard.refresh failed:', e);
+        }
     },
 
     updateChartSelector(products) {
@@ -185,6 +187,8 @@ const Dashboard = {
         try {
             await API.deleteTracked(id);
             this.refresh();
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+            console.error('Dashboard.deleteProduct failed:', e);
+        }
     }
 };

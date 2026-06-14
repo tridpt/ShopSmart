@@ -159,7 +159,9 @@ const Chat = {
                     this.appendMessage(msg.role, msg.content);
                 });
             }
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+            console.warn('Chat.loadHistory failed:', e);
+        }
     },
 
     async clearChat() {
@@ -185,6 +187,8 @@ const Chat = {
                     this.sendMessage();
                 });
             });
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+            console.warn('Chat.clearChat failed:', e);
+        }
     }
 };
