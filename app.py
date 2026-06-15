@@ -12,7 +12,7 @@ sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 # Ensure project root is in path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from flask import Flask, request, jsonify, send_from_directory, g
+from flask import Flask, request, jsonify, send_from_directory, g, Response
 from flask_cors import CORS
 
 import config
@@ -255,6 +255,87 @@ def update_target(product_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/track", methods=["POST"])
+@login_required
+def track_product():
+    """Track a product directly from the search UI (no AI/chat needed)."""
+    try:
+        data = request.get_json(silent=True) or {}
+        name = (data.get("name") or data.get("product_name") or "").strip()
+        if not name:
+            return jsonify({"error": "Tên sản phẩm là bắt buộc"}), 400
+
+        url = (data.get("url") or "").strip() or None
+        source = (data.get("source") or "").strip() or None
+
+        def _num(key):
+            val = data.get(key)
+            if val is None or val == "":
+                return None
+            try:
+                f = float(val)
+            except (TypeError, ValueError):
+                return "invalid"
+            return f if f > 0 else "invalid"
+
+        current_price = _num("current_price")
+        target_price = _num("target_price")
+        if current_price == "invalid":
+            return jsonify({"error": "current_price phải là số dương"}), 400
+        if target_price == "invalid":
+            return jsonify({"error": "target_price phải là số dương"}), 400
+
+        product_id = Product.create(
+            name=name, url=url, source=source,
+            current_price=current_price, target_price=target_price,
+            user_id=g.user_id,
+        )
+        Notification.create(
+            title="📌 Đã thêm vào theo dõi",
+            message=f"'{name}' đã được thêm vào danh sách theo dõi giá.",
+            product_id=product_id, ntype="tracking", user_id=g.user_id,
+        )
+        return jsonify({"success": True, "product_id": product_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/tracked/export", methods=["GET"])
+@login_required
+def export_tracked():
+    """Export the user's tracked products as a CSV download."""
+    try:
+        import csv
+        import io
+
+        products = Product.get_all(user_id=g.user_id)
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow([
+            "id", "name", "source", "url",
+            "current_price", "target_price", "currency",
+            "created_at", "updated_at",
+        ])
+        for p in products:
+            writer.writerow([
+                p.get("id"), p.get("name"), p.get("source"), p.get("url"),
+                p.get("current_price"), p.get("target_price"),
+                p.get("currency"), p.get("created_at"), p.get("updated_at"),
+            ])
+
+        # Prepend a UTF-8 BOM so Excel renders Vietnamese characters correctly.
+        csv_data = "\ufeff" + buf.getvalue()
+        return Response(
+            csv_data,
+            mimetype="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": "attachment; filename=shopsmart_tracked.csv",
+            },
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ── Price History API ────────────────────────────────────────
 @app.route("/api/price-history/<int:product_id>", methods=["GET"])
 @login_required
@@ -349,6 +430,80 @@ def scrape_price_api():
             result["price_formatted"] = f"{price:,.0f}đ".replace(",", ".")
 
         return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Price Comparison API (gom giá đa sàn) ───────────────────
+@app.route("/api/compare", methods=["GET"])
+@login_required
+def compare_prices():
+    """
+    Search a product, scrape prices from each source, group them into one
+    comparison table and flag the cheapest. Limited scraping to stay responsive.
+    """
+    try:
+        from agent.tools.web_search import search_product
+        from agent.tools.price_scraper import scrape_price
+        import json as _json
+
+        query = request.args.get("q", "").strip()
+        if not query:
+            return jsonify({"error": "Query parameter 'q' is required"}), 400
+
+        # How many result URLs to actually scrape prices for (cost control).
+        try:
+            limit = max(1, min(int(request.args.get("limit", "6")), 10))
+        except (TypeError, ValueError):
+            limit = 6
+
+        search = _json.loads(search_product(query, max_results=12))
+        results = search.get("results", []) if search.get("success") else []
+
+        # Keep the first result per source so we compare across distinct sellers.
+        by_source = {}
+        for r in results:
+            src = r.get("source") or "Web"
+            if src not in by_source and r.get("url"):
+                by_source[src] = r
+            if len(by_source) >= limit:
+                break
+
+        offers = []
+        for src, r in by_source.items():
+            offer = {
+                "source": src,
+                "product_name": r.get("product_name"),
+                "url": r.get("url"),
+                "price": None,
+                "price_formatted": None,
+            }
+            try:
+                scraped = _json.loads(scrape_price(r["url"]))
+                if scraped.get("price"):
+                    offer["price"] = scraped["price"]
+                    offer["price_formatted"] = f"{scraped['price']:,.0f}đ".replace(",", ".")
+            except Exception:
+                pass
+            offers.append(offer)
+
+        priced = [o for o in offers if o["price"] is not None]
+        priced.sort(key=lambda o: o["price"])
+        cheapest_source = priced[0]["source"] if priced else None
+        for o in offers:
+            o["is_cheapest"] = (o["source"] == cheapest_source and o["price"] is not None)
+
+        # Show priced offers first (sorted), then the ones we couldn't price.
+        ordered = priced + [o for o in offers if o["price"] is None]
+
+        return jsonify({
+            "success": True,
+            "query": query,
+            "total_offers": len(ordered),
+            "priced_count": len(priced),
+            "cheapest_source": cheapest_source,
+            "offers": ordered,
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

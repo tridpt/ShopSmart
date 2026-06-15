@@ -3,13 +3,52 @@
  */
 const Dashboard = {
     chart: null,
+    _products: [],
+    _sortBy: 'name',
 
     init() {
         const refreshBtn = document.getElementById('btn-refresh-prices');
         if (refreshBtn) {
             refreshBtn.addEventListener('click', () => this.refreshPrices());
         }
+        const exportBtn = document.getElementById('btn-export-tracked');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => this.exportCsv());
+        }
+        const sortSel = document.getElementById('tracking-sort');
+        if (sortSel) {
+            sortSel.addEventListener('change', () => {
+                this._sortBy = sortSel.value;
+                this.updateTrackingList(this._products);
+            });
+        }
+        const filterInput = document.getElementById('tracking-filter');
+        if (filterInput) {
+            filterInput.addEventListener('input', () => this.updateTrackingList(this._products));
+        }
         this.refresh();
+    },
+
+    async exportCsv() {
+        try {
+            const res = await fetch(API.exportTrackedUrl(), { headers: API._headers() });
+            if (!res.ok) {
+                alert('Không thể xuất CSV.');
+                return;
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'shopsmart-tracked.csv';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error('Export CSV failed:', e);
+            alert('Lỗi khi xuất CSV.');
+        }
     },
 
     async refreshPrices() {
@@ -48,6 +87,7 @@ const Dashboard = {
             ]);
 
             const products = tracked.products || [];
+            this._products = products;
             document.getElementById('stat-total').textContent = products.length;
             document.getElementById('stat-alerts').textContent = notifications.unread_count || 0;
             document.getElementById('stat-chats').textContent = (chatHistory.history || []).length;
@@ -122,12 +162,34 @@ const Dashboard = {
             });
             const prices = history.map(h => h.price);
 
+            // Identify the all-time low / high points so we can highlight them.
+            const minPrice = Math.min(...prices);
+            const maxPrice = Math.max(...prices);
+            const minIdx = prices.indexOf(minPrice);
+            const maxIdx = prices.indexOf(maxPrice);
+
+            const pointColors = prices.map((_, i) => {
+                if (i === minIdx) return '#2ECC71';   // lowest ever → green
+                if (i === maxIdx) return '#FF6B6B';    // highest ever → red
+                return '#6C63FF';
+            });
+            const pointRadii = prices.map((_, i) =>
+                (i === minIdx || i === maxIdx) ? 7 : 3);
+
             if (this.chart) this.chart.destroy();
 
             const ctx = document.getElementById('price-chart').getContext('2d');
             const gradient = ctx.createLinearGradient(0, 0, 0, 300);
             gradient.addColorStop(0, 'rgba(108, 99, 255, 0.3)');
             gradient.addColorStop(1, 'rgba(108, 99, 255, 0)');
+
+            // Show a small legend line summarising the min/max.
+            const statsEl = document.getElementById('chart-stats');
+            if (statsEl) {
+                statsEl.innerHTML =
+                    `<span class="chart-stat low"><i class="fas fa-arrow-down"></i> Thấp nhất: ${minPrice.toLocaleString('vi-VN')}đ</span>` +
+                    `<span class="chart-stat high"><i class="fas fa-arrow-up"></i> Cao nhất: ${maxPrice.toLocaleString('vi-VN')}đ</span>`;
+            }
 
             this.chart = new Chart(ctx, {
                 type: 'line',
@@ -139,9 +201,10 @@ const Dashboard = {
                         borderColor: '#6C63FF',
                         backgroundColor: gradient,
                         borderWidth: 2,
-                        pointBackgroundColor: '#6C63FF',
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
+                        pointBackgroundColor: pointColors,
+                        pointBorderColor: pointColors,
+                        pointRadius: pointRadii,
+                        pointHoverRadius: 8,
                         fill: true,
                         tension: 0.4,
                     }]
@@ -188,9 +251,42 @@ const Dashboard = {
             return;
         }
 
-        list.innerHTML = products.map(p => {
+        // Apply free-text filter (matches name or source).
+        const filterEl = document.getElementById('tracking-filter');
+        const q = (filterEl ? filterEl.value : '').trim().toLowerCase();
+        let rows = products.slice();
+        if (q) {
+            rows = rows.filter(p =>
+                (p.name || '').toLowerCase().includes(q) ||
+                (p.source || '').toLowerCase().includes(q));
+        }
+
+        // Apply sort.
+        const sortBy = this._sortBy || 'name';
+        const num = (v) => (v == null ? null : Number(v));
+        const dropPct = (p) => {
+            const cur = num(p.current_price), tgt = num(p.target_price);
+            if (cur == null || tgt == null || cur <= 0) return null;
+            return ((cur - tgt) / cur) * 100; // how far above target, as %
+        };
+        rows.sort((a, b) => {
+            switch (sortBy) {
+                case 'price_asc': return (num(a.current_price) ?? Infinity) - (num(b.current_price) ?? Infinity);
+                case 'price_desc': return (num(b.current_price) ?? -Infinity) - (num(a.current_price) ?? -Infinity);
+                case 'drop': return (dropPct(b) ?? -Infinity) - (dropPct(a) ?? -Infinity);
+                case 'name':
+                default: return (a.name || '').localeCompare(b.name || '', 'vi');
+            }
+        });
+
+        if (rows.length === 0) {
+            list.innerHTML = `<div class="empty-state"><i class="fas fa-filter"></i><h3>Không có sản phẩm khớp bộ lọc</h3></div>`;
+            return;
+        }
+
+        list.innerHTML = rows.map(p => {
             const price = p.current_price ? `${Number(p.current_price).toLocaleString('vi-VN')}đ` : 'N/A';
-            const target = p.target_price ? `Mục tiêu: ${Number(p.target_price).toLocaleString('vi-VN')}đ` : '';
+            const targetVal = p.target_price ? Number(p.target_price) : '';
             const source = p.source || 'Web';
             return `
                 <div class="track-card animate-fade-in">
@@ -201,7 +297,13 @@ const Dashboard = {
                     </div>
                     <div class="track-price">
                         <span class="track-current">${price}</span>
-                        <span class="track-target">${target}</span>
+                        <div class="track-target-edit">
+                            <input type="number" min="0" step="1000" placeholder="Giá mục tiêu"
+                                   value="${targetVal}" id="target-input-${p.id}" class="target-input">
+                            <button class="btn-set-target" onclick="Dashboard.setTarget(${p.id})" title="Lưu giá mục tiêu">
+                                <i class="fas fa-check"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="track-actions">
                         <button class="btn-icon" title="Xóa" onclick="Dashboard.deleteProduct(${p.id})">
@@ -210,6 +312,28 @@ const Dashboard = {
                     </div>
                 </div>`;
         }).join('');
+    },
+
+    async setTarget(id) {
+        const input = document.getElementById(`target-input-${id}`);
+        if (!input) return;
+        const raw = input.value.trim();
+        const price = raw === '' ? null : Number(raw);
+        if (price !== null && (!isFinite(price) || price <= 0)) {
+            alert('Giá mục tiêu phải là số dương.');
+            return;
+        }
+        try {
+            const data = await API.updateTarget(id, price);
+            if (data && data.error) {
+                alert('Không thể cập nhật: ' + data.error);
+                return;
+            }
+            this.refresh();
+        } catch (e) {
+            console.error('Dashboard.setTarget failed:', e);
+            alert('Lỗi khi lưu giá mục tiêu.');
+        }
     },
 
     async deleteProduct(id) {

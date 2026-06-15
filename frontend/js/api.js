@@ -28,6 +28,22 @@ const API = {
         }
     },
 
+    /** Download a file from an authenticated endpoint as a blob. */
+    async download(endpoint, filename) {
+        const res = await fetch(`${this.BASE}${endpoint}`, { headers: this._headers() });
+        this._handle401(res);
+        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'download';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    },
+
     async post(endpoint, data) {
         const res = await fetch(`${this.BASE}${endpoint}`, {
             method: 'POST',
@@ -76,9 +92,12 @@ const API = {
     getChatHistory: () => API.get('/api/chat/history'),
     clearChat: () => API.post('/api/chat/clear'),
     getTracked: () => API.get('/api/tracked'),
+    trackProduct: (payload) => API.post('/api/track', payload),
     deleteTracked: (id) => API.del(`/api/tracked/${id}`),
     updateTarget: (id, price) => API.put(`/api/tracked/${id}/target`, { target_price: price }),
     getPriceHistory: (id) => API.get(`/api/price-history/${id}`),
+    compare: (query) => API.get(`/api/compare?q=${encodeURIComponent(query)}`),
+    exportTrackedUrl: () => '/api/tracked/export',
     refreshPrices: () => API.post('/api/refresh-prices'),
     getNotifications: () => API.get('/api/notifications'),
     markNotificationsRead: () => API.post('/api/notifications/read'),

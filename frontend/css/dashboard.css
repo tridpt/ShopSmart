@@ -53,3 +53,89 @@
 .notif-title { font-weight: 600; font-size: 0.88rem; margin-bottom: 4px; }
 .notif-message { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; }
 .notif-time { font-size: 0.7rem; color: var(--text-muted); margin-top: 6px; }
+
+/* ── Tracking toolbar: filter + sort + export ───────────── */
+.tracking-toolbar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.tracking-filter-wrap {
+    flex: 1 1 240px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: var(--bg-surface, #1a1a2e);
+    border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+    border-radius: 10px;
+}
+.tracking-filter-wrap i { color: #6a6a80; }
+.tracking-filter-wrap input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary, #e8e8f0);
+    font-size: 14px;
+}
+.tracking-sort {
+    padding: 8px 14px;
+    background: var(--bg-surface, #1a1a2e);
+    border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+    border-radius: 10px;
+    color: var(--text-primary, #e8e8f0);
+    font-size: 14px;
+    cursor: pointer;
+}
+
+/* Inline target-price editing */
+.track-target-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+.track-target-edit input {
+    width: 110px;
+    padding: 4px 8px;
+    background: var(--bg-base, #12122050);
+    border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+    border-radius: 6px;
+    color: var(--text-primary, #e8e8f0);
+    font-size: 12px;
+}
+.track-target-edit button {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent-purple, #6C63FF);
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+}
+.track-empty-filter {
+    text-align: center;
+    color: #6a6a80;
+    padding: 24px;
+    font-size: 14px;
+}
+
+
+/* ── Chart min/max legend ─────────────────────────── */
+.chart-stats {
+    display: flex;
+    gap: 16px;
+    margin: 8px 0 12px;
+    flex-wrap: wrap;
+}
+.chart-stat {
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.chart-stat.low { color: #2ECC71; }
+.chart-stat.high { color: #FF6B6B; }

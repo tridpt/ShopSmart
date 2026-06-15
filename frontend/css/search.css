@@ -121,3 +121,114 @@
     background: linear-gradient(90deg, var(--bg-surface) 25%, var(--bg-surface-hover) 50%, var(--bg-surface) 75%);
     background-size: 200% 100%; animation: shimmer 1.5s infinite;
 }
+
+/* ── Track-from-search row ─────────────────────────────── */
+.track-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    width: 100%;
+}
+
+.track-target-input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    background: var(--bg-surface, #1a1a2e);
+    color: var(--text-primary, #e8e8f0);
+    font-size: 13px;
+}
+
+.track-target-input:focus {
+    outline: none;
+    border-color: var(--accent-purple, #6C63FF);
+}
+
+.btn-track {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent-purple, #6C63FF);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.btn-track:hover:not(:disabled) { opacity: 0.88; }
+.btn-track:disabled { opacity: 0.6; cursor: default; }
+.btn-track.tracked { background: #2ECC71; }
+
+/* ── Price comparison table ──────────────────────────── */
+.compare-table {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.cmp-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-surface, #1a1a2e);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 12px;
+}
+
+.cmp-row.cheapest {
+    border-color: #2ECC71;
+    box-shadow: 0 0 0 1px rgba(46, 204, 113, 0.4);
+}
+
+.cmp-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary, #e8e8f0);
+    font-size: 14px;
+}
+
+.cmp-price {
+    font-weight: 700;
+    color: var(--accent-cyan, #00D9FF);
+    white-space: nowrap;
+}
+
+.cmp-price.no-price {
+    color: var(--text-muted, #6a6a80);
+    font-weight: 400;
+}
+
+.cmp-best {
+    color: #2ECC71;
+    font-weight: 600;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.cmp-link {
+    color: var(--accent-cyan, #00D9FF);
+    text-decoration: none;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+#btn-compare {
+    margin-left: 8px;
+}
+
+@media (max-width: 640px) {
+    .cmp-row { flex-wrap: wrap; }
+    .cmp-name { flex-basis: 100%; }
+}
