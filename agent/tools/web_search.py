@@ -81,6 +81,57 @@ def _identify_source(url: str) -> str:
     return "Web"
 
 
+# Path fragments that signal a non-product page (blog/news/help/promo listing).
+# These pages have no price, so scraping them always fails — drop them early.
+_NON_PRODUCT_PATTERNS = [
+    "/sforum", "/blog", "/tin-tuc", "/tintuc", "/news", "/wiki",
+    "/khuyen-mai", "/hoi-dap", "/huong-dan", "/danh-gia", "/review",
+    "/so-sanh", "/tu-van", "/kinh-nghiem", "/meo-", "/thu-thuat",
+    "/cau-hoi", "/faq", "/lien-he", "/gioi-thieu", "/chinh-sach",
+    "/tag/", "/chu-de", "/video", "/game/",
+]
+
+# Positive signals that a URL is a real product page on known VN e-commerce sites.
+_PRODUCT_URL_HINTS = [
+    re.compile(r"-p\d+\.html"),       # Tiki: ...-p123456.html
+    re.compile(r"\.html$"),            # TGDD/DMX/CellphoneS product pages
+    re.compile(r"/products?/"),        # generic /product/ or /products/
+    re.compile(r"-i\.\d+\.\d+"),       # Shopee: ...-i.shopid.itemid
+    re.compile(r"/p/"),
+]
+
+
+def _is_product_url(url: str) -> bool:
+    """
+    Heuristic filter: keep likely product pages, drop blog/news/promo pages.
+
+    Search engines often return articles ('sforum', '/blog/', '/khuyen-mai/')
+    which have no price. Scraping those always fails, so we exclude them here.
+    """
+    if not url:
+        return False
+    low = url.lower()
+
+    # Reject obvious non-product sections.
+    for bad in _NON_PRODUCT_PATTERNS:
+        if bad in low:
+            return False
+
+    # If we recognise a positive product-URL signal, keep it.
+    for pat in _PRODUCT_URL_HINTS:
+        if pat.search(low):
+            return True
+
+    # Otherwise: keep only if the path looks like a product slug (has a path
+    # segment beyond the domain root, e.g. a long hyphenated name).
+    try:
+        path = re.sub(r"^https?://[^/]+", "", low).strip("/")
+    except Exception:
+        path = ""
+    # A bare domain or a single short segment is unlikely to be a product page.
+    return bool(path) and ("-" in path or "/" in path) and len(path) > 8
+
+
 def search_product(query: str, max_results: int = 10) -> str:
     """
     Tim kiem san pham tren cac san thuong mai dien tu Viet Nam.
@@ -164,12 +215,16 @@ def _do_search(query: str, max_results: int = 10) -> str:
                         clean_name = _clean_title(title)
                         clean_snip = _clean_snippet(snippet)
 
-                        if clean_name and source != "Web":
+                        # Skip article/blog/news URLs — they have no price and
+                        # make the "Xem giá" button fail. Only keep real product
+                        # pages from a known store.
+                        if clean_name and source != "Web" and _is_product_url(url):
                             all_results.append({
                                 "product_name": clean_name,
                                 "url": url,
                                 "source": source,
                                 "snippet": clean_snip[:160] if clean_snip else None,
+                                "is_product": True,
                             })
                 except Exception:
                     continue
@@ -201,11 +256,14 @@ def _do_search(query: str, max_results: int = 10) -> str:
                                 "url": url,
                                 "source": source,
                                 "snippet": clean_snip[:160] if clean_snip else None,
+                                "is_product": _is_product_url(url),
                             })
                 except Exception:
                     pass
 
-        # Limit results
+        # Prioritise real product pages over anything left in (stable sort keeps
+        # original order within each group), then cap the count.
+        all_results.sort(key=lambda r: not r.get("is_product", False))
         final_results = all_results[:max_results]
 
         if not final_results:

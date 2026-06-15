@@ -327,13 +327,21 @@ def scrape_price(url: str) -> str:
         resp = _fetch(url)
         soup = BeautifulSoup(resp.text, "lxml")
 
+        # For known stores we trust structured data + site-tuned selectors only.
+        # The generic selector scans the whole page and frequently grabs an
+        # accessory price or a "giảm 3 triệu" promo number, returning a wrong
+        # (too-low) price — worse than returning nothing. So we only fall back
+        # to generic selectors on UNKNOWN sites.
+        is_known_site = any(domain in url for domain in SITE_SELECTORS)
+
         strategies = [
             ("jsonld", lambda: _extract_price_jsonld(soup)),
             ("meta", lambda: _extract_price_meta(soup)),
             ("embedded_json", lambda: _extract_price_embedded_json(soup)),
             ("site_css", lambda: _extract_price_site_specific(soup, url)),
-            ("generic_css", lambda: _extract_price_selectors(soup)),
         ]
+        if not is_known_site:
+            strategies.append(("generic_css", lambda: _extract_price_selectors(soup)))
         for method, fn in strategies:
             result = fn()
             if result:

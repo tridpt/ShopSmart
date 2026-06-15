@@ -88,3 +88,58 @@ def test_scrape_price_rejects_bad_url():
     import json
     out = json.loads(ps.scrape_price("not-a-url"))
     assert out["success"] is False
+
+
+# ── Known-site guard: don't fall back to noisy generic selectors ────
+def test_known_site_skips_generic_selector(monkeypatch):
+    """
+    On a known store (e.g. thegioididong.com) where structured data has no
+    usable price, we must NOT fall back to the generic selector — it grabs
+    accessory/promo numbers and returns a wrong (too-low) price. Returning
+    'no price' is the correct, safe behaviour.
+    """
+    import json
+
+    # A TGDD-like page: JSON-LD price is 0 (placeholder), and a misleading
+    # ".price" element holds an accessory price.
+    html = """
+    <html><head><title>iPhone 15 Pro Max</title>
+    <script type="application/ld+json">
+    {"@type":"Product","name":"iPhone 15 Pro Max",
+     "offers":{"@type":"Offer","price":0.0,"priceCurrency":"VND"}}
+    </script>
+    </head><body>
+      <div class="price">220.000đ</div>
+    </body></html>
+    """
+
+    class _Resp:
+        text = html
+        def raise_for_status(self): pass
+
+    monkeypatch.setattr(ps, "_fetch", lambda url: _Resp())
+
+    out = json.loads(ps.scrape_price("https://www.thegioididong.com/dtdd/iphone-15-pro-max"))
+    # Must not return the bogus 220.000đ accessory price.
+    assert out["success"] is False
+
+
+def test_unknown_site_uses_generic_selector(monkeypatch):
+    """On an unknown site, the generic selector is still allowed as a fallback."""
+    import json
+
+    html = """
+    <html><head><title>Sản phẩm lạ</title></head><body>
+      <div class="product-price">12.990.000đ</div>
+    </body></html>
+    """
+
+    class _Resp:
+        text = html
+        def raise_for_status(self): pass
+
+    monkeypatch.setattr(ps, "_fetch", lambda url: _Resp())
+
+    out = json.loads(ps.scrape_price("https://some-unknown-shop.example/abc-xyz"))
+    assert out["success"] is True
+    assert out["price"] == 12_990_000
