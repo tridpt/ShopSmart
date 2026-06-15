@@ -88,3 +88,8 @@ PRICE_MONITOR_INTERVAL = int(os.environ.get("PRICE_MONITOR_INTERVAL", str(6 * 60
 PRICE_MONITOR_INITIAL_DELAY = int(os.environ.get("PRICE_MONITOR_INITIAL_DELAY", "60"))
 # Khoảng nghỉ giữa các lần scrape từng sản phẩm (giây) để tránh bị chặn.
 PRICE_MONITOR_PER_ITEM_DELAY = float(os.environ.get("PRICE_MONITOR_PER_ITEM_DELAY", "3"))
+# Có khởi động monitor ngay trong tiến trình web không.
+# Khi chạy nhiều worker (gunicorn -w N), ĐẶT false để tránh mỗi worker spawn một
+# monitor và quét trùng; thay vào đó chạy monitor riêng bằng `python monitor.py`.
+# Mặc định true cho dev / single-process (waitress 1 process vẫn an toàn).
+PRICE_MONITOR_IN_PROCESS = _env_bool("PRICE_MONITOR_IN_PROCESS", True)

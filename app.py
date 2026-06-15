@@ -35,7 +35,12 @@ CORS(app)
 
 # ── Initialize ──────────────────────────────────────────────
 init_db()
-price_monitor.start_monitor()
+# Only start the background monitor inside the web process when configured to.
+# For multi-worker deployments (gunicorn -w N), set PRICE_MONITOR_IN_PROCESS=false
+# and run a single dedicated monitor process via `python monitor.py` instead, so
+# tracked products aren't re-scraped N times in parallel.
+if config.PRICE_MONITOR_IN_PROCESS:
+    price_monitor.start_monitor()
 
 # Per-user agent sessions (each user gets an isolated chat context).
 _agents = {}

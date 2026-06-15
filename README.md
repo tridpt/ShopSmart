@@ -65,6 +65,8 @@ python app.py
 
 Open **http://127.0.0.1:5000** in your browser, then register an account to get started.
 
+`app.py` is the **development** server (Werkzeug). For production, see [Deployment](#deployment).
+
 ## Configuration
 
 Copy `.env.example` to `.env` and fill in what you need. Only `GEMINI_API_KEY` is required.
@@ -76,12 +78,36 @@ Copy `.env.example` to `.env` and fill in what you need. Only `GEMINI_API_KEY` i
 | `FLASK_DEBUG` | `true` to enable debug mode (default off) |
 | `PRICE_MONITOR_ENABLED` | `false` to disable the background price monitor |
 | `PRICE_MONITOR_INTERVAL` | Seconds between scan cycles (default 6h) |
+| `PRICE_MONITOR_IN_PROCESS` | `false` to stop the web process from starting the monitor (use with a separate `monitor.py` when running multiple workers) |
 | `TELEGRAM_BOT_TOKEN` | Enable Telegram price alerts |
 | `SMTP_HOST` / `SMTP_USER` / `SMTP_PASSWORD` | Enable email price alerts |
+| `SERVE_THREADS` | Waitress worker threads (default 8) |
 
-> Note: the background price monitor runs inside the Flask process. If you deploy
-> behind a multi-worker WSGI server, run the monitor as a separate process to
-> avoid duplicate scans.
+## Deployment
+
+`app.py` is the Flask dev server — don't use it in production. Use a real WSGI server instead.
+
+### Single process (waitress, cross-platform incl. Windows)
+
+```bash
+python serve.py
+# or:  waitress-serve --host=0.0.0.0 --port=5000 wsgi:app
+```
+
+The background price monitor starts in-process — fine for a single process.
+
+### Multiple workers (e.g. gunicorn on Linux)
+
+Running N workers would spawn N monitors and scrape every product N times. To avoid
+that, disable the in-process monitor and run one dedicated monitor process:
+
+```bash
+# .env: PRICE_MONITOR_IN_PROCESS=false
+gunicorn -w 4 -b 0.0.0.0:5000 wsgi:app   # web workers
+python monitor.py                        # single monitor process
+```
+
+Always set `JWT_SECRET` to a fixed value in production so tokens survive restarts.
 
 ## Testing
 
