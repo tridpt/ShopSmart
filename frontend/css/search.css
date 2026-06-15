@@ -82,11 +82,15 @@
 .product-name { font-weight: 600; font-size: 0.92rem; line-height: 1.4; flex: 1; }
 .product-snippet { font-size: 0.78rem; color: var(--text-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-.product-footer { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border-color); }
+/* Footer now stacks two rows: the action buttons and the track row.
+   Use a vertical layout so they don't fight over horizontal space. */
+.product-footer { display: flex; flex-direction: column; align-items: stretch; gap: 10px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border-color); }
 .product-price { font-size: 1.2rem; font-weight: 800; color: var(--accent-coral); }
 .product-price.no-price { font-size: 0.85rem; color: var(--text-muted); font-weight: 400; }
 
-.product-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.product-actions { display: flex; gap: 8px; width: 100%; }
+.product-actions .btn-visit,
+.product-actions .btn-check-price { flex: 1; justify-content: center; }
 .btn-visit {
     padding: 8px 16px; background: var(--gradient-primary); border: none;
     border-radius: var(--radius-sm); color: white; font-family: var(--font-family);
