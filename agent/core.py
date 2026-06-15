@@ -8,6 +8,7 @@ from google import genai
 from google.genai import types
 
 import config
+from agent import context
 from agent.prompts import SYSTEM_PROMPT
 from agent.tools import web_search, price_scraper, price_tracker, price_analyzer, notifier
 
@@ -61,14 +62,20 @@ class ShopSmartAgent:
             config=self._config,
         )
 
-    def process_message(self, user_message: str) -> dict:
+    def process_message(self, user_message: str, user_id=None) -> dict:
         """
         Process a user message through the ReAct loop.
+
+        Args:
+            user_message: the user's text.
+            user_id: the authenticated user's id, made available to tools
+                (e.g. track_price) via agent.context during this call.
 
         Returns:
             dict with keys: response (str), tool_calls (list), error (str|None)
         """
         tool_calls = []
+        _ctx_token = context.set_current_user_id(user_id)
 
         try:
             response = self.chat.send_message(user_message)
@@ -141,6 +148,8 @@ class ShopSmartAgent:
                 "tool_calls": tool_calls,
                 "error": error_msg,
             }
+        finally:
+            context.reset_current_user_id(_ctx_token)
 
     @staticmethod
     def _extract_function_calls(response) -> list:

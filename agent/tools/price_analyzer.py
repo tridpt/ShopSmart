@@ -4,6 +4,7 @@ Tool: Price Analyzer — Phân tích xu hướng giá sản phẩm.
 import json
 import traceback
 from database.models import Product, PriceHistory
+from agent.context import get_current_user_id
 
 
 def analyze_price(product_name: str) -> str:
@@ -17,7 +18,7 @@ def analyze_price(product_name: str) -> str:
         JSON string chứa phân tích giá
     """
     try:
-        products = Product.search_by_name(product_name)
+        products = Product.search_by_name(product_name, user_id=get_current_user_id())
         if not products:
             return json.dumps({
                 "success": False,

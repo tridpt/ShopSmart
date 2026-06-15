@@ -21,8 +21,38 @@ function switchView(viewName) {
     document.getElementById('sidebar').classList.remove('open');
 }
 
+let _appModulesReady = false;
+let _notifTimer = null;
+
+/** Initialise app modules. Runs once, only after authentication. */
+function onAuthenticated() {
+    if (_appModulesReady) {
+        // Already initialised (e.g. re-login in same tab) — just refresh data.
+        Dashboard.refresh();
+        Notifications.refresh();
+        return;
+    }
+    _appModulesReady = true;
+
+    // Init modules
+    Chat.init();
+    Dashboard.init();
+    Notifications.init();
+    Search.init();
+
+    // Health check
+    checkApiStatus();
+
+    // Periodic refresh
+    if (!_notifTimer) {
+        _notifTimer = setInterval(() => {
+            if (Auth.isLoggedIn()) Notifications.refresh();
+        }, 30000);
+    }
+}
+
 // ── Initialize ────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Nav clicks
     document.querySelectorAll('.nav-item').forEach(btn => {
         btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -35,19 +65,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Init modules
-    Chat.init();
-    Dashboard.init();
-    Notifications.init();
-    Search.init();
-
-    // Health check
-    checkApiStatus();
-
-    // Periodic refresh
-    setInterval(() => {
-        Notifications.refresh();
-    }, 30000);
+    // Gate everything behind authentication.
+    const ok = await Auth.init();
+    if (ok) onAuthenticated();
 });
 
 async function checkApiStatus() {

@@ -12,14 +12,18 @@ sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 # Ensure project root is in path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, g
 from flask_cors import CORS
 
 import config
 from database.db import init_db
-from database.models import Product, PriceHistory, Notification, ChatHistory
+from database.models import Product, PriceHistory, Notification, ChatHistory, User
 from agent.core import ShopSmartAgent
-from agent import price_monitor
+from agent import price_monitor, notify_channels
+from auth import (
+    login_required, current_user_id, create_jwt,
+    hash_password, verify_password,
+)
 
 # ── Flask App ───────────────────────────────────────────────
 app = Flask(
@@ -32,15 +36,34 @@ CORS(app)
 # ── Initialize ──────────────────────────────────────────────
 init_db()
 price_monitor.start_monitor()
-agent = None
+
+# Per-user agent sessions (each user gets an isolated chat context).
+_agents = {}
 
 
-def get_agent():
-    """Lazy-init the agent (so missing API key doesn't crash startup)."""
-    global agent
+def get_agent(user_id):
+    """Lazy-init a per-user agent (so missing API key doesn't crash startup)."""
+    agent = _agents.get(user_id)
     if agent is None:
         agent = ShopSmartAgent()
+        _agents[user_id] = agent
     return agent
+
+
+def _safe_user(user: dict) -> dict:
+    """Strip sensitive fields before returning a user to the client."""
+    if not user:
+        return {}
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "display_name": user["display_name"],
+        "notify_email": bool(user.get("notify_email", 1)),
+        "has_telegram": bool((user.get("push_subscription") or "").strip()),
+    }
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 # ── Frontend Routes ─────────────────────────────────────────
@@ -49,26 +72,91 @@ def index():
     return send_from_directory("frontend", "index.html")
 
 
+# ── Auth API ────────────────────────────────────────────────
+@app.route("/api/auth/register", methods=["POST"])
+def register():
+    """Register a new account."""
+    try:
+        data = request.get_json(silent=True) or {}
+        email = (data.get("email") or "").lower().strip()
+        password = data.get("password") or ""
+        display_name = (data.get("display_name") or "").strip()
+
+        if not _EMAIL_RE.match(email):
+            return jsonify({"error": "Email không hợp lệ"}), 400
+        if len(password) < 6:
+            return jsonify({"error": "Mật khẩu tối thiểu 6 ký tự"}), 400
+        if not display_name:
+            return jsonify({"error": "Vui lòng nhập tên hiển thị"}), 400
+        if User.get_by_email(email):
+            return jsonify({"error": "Email này đã được đăng ký"}), 409
+
+        user_id = User.create(email, display_name, hash_password(password))
+        token = create_jwt(user_id)
+        return jsonify({"token": token, "user": _safe_user(User.get_by_id(user_id))})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/auth/login", methods=["POST"])
+def login():
+    """Login with email and password."""
+    try:
+        data = request.get_json(silent=True) or {}
+        email = (data.get("email") or "").lower().strip()
+        password = data.get("password") or ""
+
+        user = User.get_by_email(email)
+        if not user or not verify_password(password, user["password_hash"]):
+            return jsonify({"error": "Email hoặc mật khẩu không đúng"}), 401
+
+        token = create_jwt(user["id"])
+        return jsonify({"token": token, "user": _safe_user(user)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/auth/me", methods=["GET"])
+@login_required
+def get_me():
+    """Return the current authenticated user."""
+    return jsonify({"user": _safe_user(User.get_by_id(g.user_id))})
+
+
+@app.route("/api/auth/settings", methods=["PUT"])
+@login_required
+def update_settings():
+    """Update notification settings: email toggle and Telegram chat id."""
+    try:
+        data = request.get_json(silent=True) or {}
+        if "notify_email" in data:
+            User.set_notify_email(g.user_id, bool(data["notify_email"]))
+        if "telegram_chat_id" in data:
+            chat_id = (data.get("telegram_chat_id") or "").strip()
+            User.set_push_subscription(g.user_id, chat_id)
+        return jsonify({"user": _safe_user(User.get_by_id(g.user_id))})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ── Chat API ────────────────────────────────────────────────
 @app.route("/api/chat", methods=["POST"])
+@login_required
 def chat():
     """Send a message to the AI agent."""
     try:
-        data = request.get_json()
-        message = data.get("message", "").strip()
+        data = request.get_json(silent=True) or {}
+        message = (data.get("message") or "").strip()
 
         if not message:
             return jsonify({"error": "Message is required"}), 400
 
-        # Save user message
-        ChatHistory.add("user", message)
+        ChatHistory.add("user", message, user_id=g.user_id)
 
-        # Process through agent
-        ai_agent = get_agent()
-        result = ai_agent.process_message(message)
+        ai_agent = get_agent(g.user_id)
+        result = ai_agent.process_message(message, user_id=g.user_id)
 
-        # Save assistant response
-        ChatHistory.add("assistant", result["response"])
+        ChatHistory.add("assistant", result["response"], user_id=g.user_id)
 
         return jsonify({
             "response": result["response"],
@@ -77,7 +165,6 @@ def chat():
         })
 
     except ValueError as e:
-        # API key not set
         return jsonify({
             "response": str(e),
             "tool_calls": [],
@@ -94,21 +181,23 @@ def chat():
 
 
 @app.route("/api/chat/history", methods=["GET"])
+@login_required
 def chat_history():
     """Get recent chat history."""
     try:
-        history = ChatHistory.get_recent(50)
+        history = ChatHistory.get_recent(50, user_id=g.user_id)
         return jsonify({"history": history})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/chat/clear", methods=["POST"])
+@login_required
 def clear_chat():
     """Clear chat history and reset agent."""
     try:
-        ChatHistory.clear()
-        global agent
+        ChatHistory.clear(user_id=g.user_id)
+        agent = _agents.get(g.user_id)
         if agent:
             agent.reset_chat()
         return jsonify({"success": True})
@@ -118,19 +207,23 @@ def clear_chat():
 
 # ── Product Tracking API ────────────────────────────────────
 @app.route("/api/tracked", methods=["GET"])
+@login_required
 def get_tracked():
-    """Get all tracked products."""
+    """Get all tracked products for the current user."""
     try:
-        products = Product.get_all()
+        products = Product.get_all(user_id=g.user_id)
         return jsonify({"products": products})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/tracked/<int:product_id>", methods=["DELETE"])
+@login_required
 def delete_tracked(product_id):
-    """Remove a product from tracking."""
+    """Remove a product from tracking (only if it belongs to the user)."""
     try:
+        if not Product.get_by_id(product_id, user_id=g.user_id):
+            return jsonify({"error": "Product not found"}), 404
         Product.delete(product_id)
         return jsonify({"success": True})
     except Exception as e:
@@ -138,17 +231,16 @@ def delete_tracked(product_id):
 
 
 @app.route("/api/tracked/<int:product_id>/target", methods=["PUT"])
+@login_required
 def update_target(product_id):
-    """Update target price for a tracked product."""
+    """Update target price for a tracked product owned by the user."""
     try:
-        # Make sure the product exists.
-        if not Product.get_by_id(product_id):
+        if not Product.get_by_id(product_id, user_id=g.user_id):
             return jsonify({"error": "Product not found"}), 404
 
         data = request.get_json(silent=True) or {}
         target = data.get("target_price")
 
-        # Validate: must be a positive number (or null to clear the target).
         if target is not None:
             try:
                 target = float(target)
@@ -165,9 +257,12 @@ def update_target(product_id):
 
 # ── Price History API ────────────────────────────────────────
 @app.route("/api/price-history/<int:product_id>", methods=["GET"])
+@login_required
 def price_history(product_id):
-    """Get price history for a product."""
+    """Get price history for a product owned by the user."""
     try:
+        if not Product.get_by_id(product_id, user_id=g.user_id):
+            return jsonify({"error": "Product not found"}), 404
         history = PriceHistory.get_by_product(product_id)
         stats = PriceHistory.get_stats(product_id)
         return jsonify({"history": history, "stats": stats})
@@ -177,10 +272,11 @@ def price_history(product_id):
 
 # ── Notifications API ────────────────────────────────────────
 @app.route("/api/notifications", methods=["GET"])
+@login_required
 def get_notifications():
-    """Get all notifications."""
+    """Get notifications for the current user."""
     try:
-        notifications = Notification.get_all()
+        notifications = Notification.get_all(user_id=g.user_id)
         unread = len([n for n in notifications if not n["is_read"]])
         return jsonify({"notifications": notifications, "unread_count": unread})
     except Exception as e:
@@ -188,10 +284,11 @@ def get_notifications():
 
 
 @app.route("/api/notifications/read", methods=["POST"])
+@login_required
 def mark_notifications_read():
-    """Mark all notifications as read."""
+    """Mark all of the user's notifications as read."""
     try:
-        Notification.mark_all_read()
+        Notification.mark_all_read(user_id=g.user_id)
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -199,10 +296,11 @@ def mark_notifications_read():
 
 # ── Price Monitor API ────────────────────────────────────────
 @app.route("/api/refresh-prices", methods=["POST"])
+@login_required
 def refresh_prices():
-    """Trigger an immediate price re-check for all tracked products."""
+    """Trigger an immediate price re-check for the user's tracked products."""
     try:
-        updated = price_monitor.run_once()
+        updated = price_monitor.run_once(user_id=g.user_id)
         return jsonify({"success": True, "updated": updated})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -210,6 +308,7 @@ def refresh_prices():
 
 # ── Direct Search API (no AI needed) ────────────────────────
 @app.route("/api/search", methods=["GET"])
+@login_required
 def direct_search():
     """Search products directly without Gemini AI."""
     try:
@@ -225,8 +324,10 @@ def direct_search():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 # ── Price Scraper API (no AI needed) ─────────────────────────
 @app.route("/api/scrape-price", methods=["POST"])
+@login_required
 def scrape_price_api():
     """Scrape real price from a product URL."""
     try:
@@ -243,7 +344,6 @@ def scrape_price_api():
         result_json = scrape_price(url)
         result = _json.loads(result_json)
 
-        # Format price for display
         if result.get("price"):
             price = result["price"]
             result["price_formatted"] = f"{price:,.0f}đ".replace(",", ".")
@@ -252,6 +352,7 @@ def scrape_price_api():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 # ── Health Check ─────────────────────────────────────────────
 @app.route("/api/health", methods=["GET"])
 def health():
@@ -259,6 +360,10 @@ def health():
         "status": "ok",
         "api_key_set": bool(config.GEMINI_API_KEY),
         "model": config.GEMINI_MODEL,
+        "channels": {
+            "telegram": notify_channels.telegram_configured(),
+            "email": notify_channels.email_configured(),
+        },
     })
 
 

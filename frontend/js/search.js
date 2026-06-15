@@ -46,8 +46,7 @@ const Search = {
         this.resultsEl.innerHTML = Array(6).fill('<div class="product-skeleton"></div>').join('');
 
         try {
-            const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-            const data = await res.json();
+            const data = await API.get(`/api/search?q=${encodeURIComponent(query)}`);
 
             if (data.error) {
                 this.statusEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${data.error}`;
@@ -123,12 +122,7 @@ const Search = {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lấy giá...';
 
         try {
-            const res = await fetch('/api/scrape-price', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
-            });
-            const data = await res.json();
+            const data = await API.post('/api/scrape-price', { url });
 
             if (data.price) {
                 display.innerHTML = `<span class="product-price">${data.price_formatted || data.price}</span>`;

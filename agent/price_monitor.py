@@ -10,8 +10,9 @@ import time
 import traceback
 
 import config
-from database.models import Product, Notification
+from database.models import Product, Notification, User
 from agent.tools.price_scraper import scrape_price
+from agent import notify_channels
 
 
 _monitor_thread = None
@@ -62,33 +63,53 @@ def check_product(product: dict) -> dict | None:
         "new_price": new_price,
     }
 
-    # Tạo thông báo phù hợp.
+    # Tạo thông báo phù hợp (lưu DB + đẩy qua kênh thật).
+    user_id = product.get("user_id")
     target = product.get("target_price")
+    notif_title = notif_message = notif_type = None
+
     if target is not None and new_price <= float(target):
-        Notification.create(
-            title="🎯 Giá đã chạm mục tiêu!",
-            message=f"'{product['name']}' hiện còn {_format_vnd(new_price)} "
-                    f"(mục tiêu {_format_vnd(target)}). Thời điểm tốt để mua!",
-            product_id=product["id"],
-            ntype="deal",
-        )
+        notif_title = "🎯 Giá đã chạm mục tiêu!"
+        notif_message = (f"'{product['name']}' hiện còn {_format_vnd(new_price)} "
+                         f"(mục tiêu {_format_vnd(target)}). Thời điểm tốt để mua!")
+        notif_type = "deal"
     elif old_price is not None and new_price < float(old_price):
+        notif_title = "📉 Giá giảm"
+        notif_message = (f"'{product['name']}' giảm từ {_format_vnd(old_price)} "
+                         f"xuống {_format_vnd(new_price)}.")
+        notif_type = "alert"
+
+    if notif_title:
         Notification.create(
-            title="📉 Giá giảm",
-            message=f"'{product['name']}' giảm từ {_format_vnd(old_price)} "
-                    f"xuống {_format_vnd(new_price)}.",
+            title=notif_title,
+            message=notif_message,
             product_id=product["id"],
-            ntype="alert",
+            ntype=notif_type,
+            user_id=user_id,
         )
+        # Đẩy thông báo thật (Telegram/email) nếu user đã cấu hình.
+        try:
+            user = User.get_by_id(user_id) if user_id else None
+            if user:
+                full_msg = notif_message
+                if product.get("url"):
+                    full_msg = f"{notif_message}\n{product['url']}"
+                notify_channels.deliver_to_user(user, notif_title, full_msg)
+        except Exception:
+            traceback.print_exc()
 
     return change
 
 
-def run_once() -> int:
-    """Quét toàn bộ sản phẩm đang theo dõi một lần. Trả về số sản phẩm có cập nhật."""
+def run_once(user_id=None) -> int:
+    """Quét sản phẩm đang theo dõi một lần. Trả về số sản phẩm có cập nhật.
+
+    Nếu ``user_id`` được truyền vào, chỉ quét sản phẩm của user đó (dùng cho
+    nút "làm mới giá" thủ công). Nếu None, quét toàn bộ (dùng cho background job).
+    """
     updated = 0
     try:
-        products = Product.get_all()
+        products = Product.get_all(user_id=user_id)
     except Exception:
         traceback.print_exc()
         return 0

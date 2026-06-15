@@ -4,6 +4,7 @@ Tool: Price Tracker — Theo dõi giá sản phẩm trong database.
 import json
 import traceback
 from database.models import Product, Notification
+from agent.context import get_current_user_id
 
 
 def track_price(product_name: str, url: str = None,
@@ -23,12 +24,14 @@ def track_price(product_name: str, url: str = None,
         JSON string xác nhận đã thêm vào theo dõi
     """
     try:
+        user_id = get_current_user_id()
         product_id = Product.create(
             name=product_name,
             url=url,
             source=source,
             current_price=current_price,
-            target_price=target_price
+            target_price=target_price,
+            user_id=user_id,
         )
 
         # Create notification
@@ -37,7 +40,8 @@ def track_price(product_name: str, url: str = None,
             title="📌 Sản phẩm mới được theo dõi",
             message=f"Đã thêm '{product_name}' vào danh sách theo dõi. Giá hiện tại: {price_str}",
             product_id=product_id,
-            ntype="tracking"
+            ntype="tracking",
+            user_id=user_id,
         )
 
         return json.dumps({
@@ -70,7 +74,7 @@ def get_tracked_products() -> str:
         JSON string chứa danh sách sản phẩm
     """
     try:
-        products = Product.get_all()
+        products = Product.get_all(user_id=get_current_user_id())
         return json.dumps({
             "success": True,
             "total": len(products),

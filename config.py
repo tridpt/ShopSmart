@@ -32,6 +32,50 @@ FLASK_PORT = int(os.environ.get("FLASK_PORT", "5000"))
 # Debug defaults to OFF for safety; enable explicitly via FLASK_DEBUG=true.
 FLASK_DEBUG = _env_bool("FLASK_DEBUG", False)
 
+# ── Auth / JWT ──────────────────────────────────────────────
+def _load_or_create_jwt_secret() -> str:
+    """JWT secret from env, or a persisted local one (gitignored) for dev."""
+    secret = os.environ.get("JWT_SECRET", "").strip()
+    if secret:
+        return secret
+    secret_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".jwt_secret")
+    try:
+        if os.path.isfile(secret_file):
+            with open(secret_file, "r", encoding="utf-8") as f:
+                existing = f.read().strip()
+                if existing:
+                    return existing
+        import secrets as _secrets
+        generated = _secrets.token_hex(32)
+        with open(secret_file, "w", encoding="utf-8") as f:
+            f.write(generated)
+        print("[WARNING] JWT_SECRET not set — generated a local one in .jwt_secret. "
+              "Set JWT_SECRET env var for production!")
+        return generated
+    except Exception:
+        import secrets as _secrets
+        return _secrets.token_hex(32)
+
+
+JWT_SECRET = _load_or_create_jwt_secret()
+JWT_EXPIRY_SECONDS = int(os.environ.get("JWT_EXPIRY_SECONDS", str(7 * 24 * 3600)))
+# bcrypt work factor; tests can lower via BCRYPT_ROUNDS=4 for speed.
+try:
+    BCRYPT_ROUNDS = max(4, min(int(os.environ.get("BCRYPT_ROUNDS", "12")), 15))
+except ValueError:
+    BCRYPT_ROUNDS = 12
+
+# ── Notification Channels (real push) ───────────────────────
+# Telegram bot — set both to enable price-drop alerts via Telegram.
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+
+# SMTP email — set all to enable email alerts.
+SMTP_HOST = os.environ.get("SMTP_HOST", "").strip()
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "").strip()
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").strip()
+SMTP_FROM = os.environ.get("SMTP_FROM", "").strip() or SMTP_USER
+
 # ── Agent ───────────────────────────────────────────────────
 MAX_AGENT_ITERATIONS = 10
 

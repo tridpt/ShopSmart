@@ -9,23 +9,28 @@ AI-powered shopping assistant that helps you find the best deals, compare prices
 
 ## Features
 
+- **Multi-user accounts** — Register/login with JWT auth; every user's tracked products, chats and notifications are private to them
 - **AI Chat Interface** — Chat naturally to search products and compare prices
 - **Web Search Tool** — Search across the internet for products and deals
-- **Price Scraper** — Extract prices from product pages automatically
+- **Price Scraper** — Extract prices from product pages automatically (site-specific selectors + sane price-range validation)
 - **Price Tracking** — Track products and monitor price changes over time
+- **Auto price monitor** — Background job re-scrapes tracked products on a schedule and records history
 - **Price Analysis** — AI-powered trend analysis and buying recommendations
-- **Notifications** — Get alerts when prices drop to your target
+- **Real notifications** — In-app alerts plus optional Telegram / email push when a price drops or hits your target
 
 ## Tech Stack
 
 | Component | Technology |
 |-----------|-----------|
-| AI Brain | Google Gemini 2.0 Flash |
+| AI Brain | Google Gemini 2.5 Flash (`google-genai` SDK) |
 | Backend | Python + Flask |
+| Auth | JWT (PyJWT) + bcrypt |
 | Database | SQLite |
 | Frontend | HTML + CSS + JavaScript |
 | Charts | Chart.js |
 | Search | DuckDuckGo Search |
+| Push channels | Telegram Bot API, SMTP email |
+| Tests | pytest |
 
 ## Quick Start
 
@@ -58,7 +63,33 @@ export GEMINI_API_KEY='your_api_key_here'
 python app.py
 ```
 
-Open **http://127.0.0.1:5000** in your browser.
+Open **http://127.0.0.1:5000** in your browser, then register an account to get started.
+
+## Configuration
+
+Copy `.env.example` to `.env` and fill in what you need. Only `GEMINI_API_KEY` is required.
+
+| Variable | Purpose |
+|----------|---------|
+| `GEMINI_API_KEY` | Gemini API key (required for AI chat) |
+| `JWT_SECRET` | Secret for signing auth tokens. **Set this in production.** A local one is auto-generated for dev. |
+| `FLASK_DEBUG` | `true` to enable debug mode (default off) |
+| `PRICE_MONITOR_ENABLED` | `false` to disable the background price monitor |
+| `PRICE_MONITOR_INTERVAL` | Seconds between scan cycles (default 6h) |
+| `TELEGRAM_BOT_TOKEN` | Enable Telegram price alerts |
+| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASSWORD` | Enable email price alerts |
+
+> Note: the background price monitor runs inside the Flask process. If you deploy
+> behind a multi-worker WSGI server, run the monitor as a separate process to
+> avoid duplicate scans.
+
+## Testing
+
+```bash
+pytest
+```
+
+Tests run against an isolated temporary SQLite database — they never touch `shopsmart.db`.
 
 ## Architecture
 

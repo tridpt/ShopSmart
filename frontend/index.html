@@ -16,8 +16,39 @@
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="css/search.css">
+    <link rel="stylesheet" href="css/auth.css">
 </head>
 <body>
+    <!-- ── Auth Overlay ────────────────────────────── -->
+    <div id="auth-overlay" class="auth-overlay" style="display:none">
+        <div class="auth-card">
+            <div class="auth-brand">
+                <div class="brand-icon"><i class="fas fa-robot"></i></div>
+                <h1>ShopSmart</h1>
+                <p>Trợ lý mua sắm thông minh</p>
+            </div>
+            <h2 id="auth-title">Đăng nhập</h2>
+            <form id="auth-form" class="auth-form" autocomplete="on">
+                <div class="auth-field" id="auth-name-group" style="display:none">
+                    <label for="auth-name">Tên hiển thị</label>
+                    <input type="text" id="auth-name" placeholder="Tên của bạn" maxlength="50">
+                </div>
+                <div class="auth-field">
+                    <label for="auth-email">Email</label>
+                    <input type="email" id="auth-email" placeholder="ban@email.com" autocomplete="email" required>
+                </div>
+                <div class="auth-field">
+                    <label for="auth-password">Mật khẩu</label>
+                    <input type="password" id="auth-password" placeholder="Tối thiểu 6 ký tự" autocomplete="current-password" required>
+                </div>
+                <div id="auth-error" class="auth-error" style="display:none"></div>
+                <button type="submit" id="auth-submit" class="auth-submit">Đăng nhập</button>
+            </form>
+            <p id="auth-toggle-text" class="auth-toggle-text">
+                Chưa có tài khoản? <a href="#" id="auth-toggle">Đăng ký</a>
+            </p>
+        </div>
+    </div>
     <!-- ── Sidebar ─────────────────────────────────── -->
     <nav id="sidebar" class="sidebar">
         <div class="sidebar-brand">
@@ -56,6 +87,13 @@
         </div>
 
         <div class="sidebar-footer">
+            <div class="user-box">
+                <div class="user-avatar"><i class="fas fa-user-circle"></i></div>
+                <span id="current-user-name" class="user-name">—</span>
+                <button class="btn-icon" id="btn-logout" title="Đăng xuất">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
             <div class="api-status" id="api-status">
                 <span class="status-dot"></span>
                 <span>Đang kiểm tra...</span>
@@ -284,6 +322,7 @@
     </main>
 
     <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
     <script src="js/chat.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/notifications.js"></script>
