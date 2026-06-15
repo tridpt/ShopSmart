@@ -16,6 +16,7 @@ function switchView(viewName) {
     // Refresh data on view switch
     if (viewName === 'dashboard' || viewName === 'tracking') Dashboard.refresh();
     if (viewName === 'notifications') Notifications.refresh();
+    if (viewName === 'settings' && typeof Settings !== 'undefined') Settings.load();
 
     // Close mobile sidebar
     document.getElementById('sidebar').classList.remove('open');
@@ -39,6 +40,7 @@ function onAuthenticated() {
     Dashboard.init();
     Notifications.init();
     Search.init();
+    if (typeof Settings !== 'undefined') Settings.init();
 
     // Health check
     checkApiStatus();

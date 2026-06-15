@@ -569,3 +569,180 @@ kbd {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+/* ── Settings View ─────────────────────────────────────── */
+.settings-content {
+    padding: 24px;
+    max-width: 680px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.settings-card {
+    background: var(--bg-surface, #1a1a2e);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+}
+
+.settings-card h3 {
+    margin: 0 0 4px;
+    font-size: 16px;
+    color: var(--text-primary, #e8e8f0);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-hint {
+    margin: 0 0 16px;
+    font-size: 13px;
+    color: var(--text-muted, #9a9ab0);
+}
+
+.settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 0;
+    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+}
+
+.settings-label-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.settings-label {
+    font-size: 14px;
+    color: var(--text-primary, #e8e8f0);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-sub {
+    font-size: 12px;
+    color: var(--text-muted, #9a9ab0);
+}
+
+.settings-value {
+    font-size: 14px;
+    color: var(--text-muted, #9a9ab0);
+}
+
+.settings-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px 0 4px;
+}
+
+.settings-field label {
+    font-size: 14px;
+    color: var(--text-primary, #e8e8f0);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-field input {
+    margin-top: 4px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+    background: var(--bg-base, #12121f);
+    color: var(--text-primary, #e8e8f0);
+    font-size: 14px;
+}
+
+.settings-field input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.settings-field code {
+    background: rgba(108, 99, 255, 0.15);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.settings-channel-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 16px 0;
+}
+
+.channel-chip {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.channel-chip.on {
+    background: rgba(46, 204, 113, 0.15);
+    color: #2ECC71;
+}
+
+.channel-chip.off {
+    background: rgba(255, 107, 107, 0.12);
+    color: #FF6B6B;
+}
+
+.settings-success {
+    color: #2ECC71;
+    font-size: 13px;
+    margin: 10px 0;
+}
+
+/* Toggle switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 46px;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.switch .slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
+    transition: 0.2s;
+}
+
+.switch .slider::before {
+    content: "";
+    position: absolute;
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: 0.2s;
+}
+
+.switch input:checked + .slider {
+    background: var(--accent-purple, #6C63FF);
+}
+
+.switch input:checked + .slider::before {
+    transform: translateX(20px);
+}

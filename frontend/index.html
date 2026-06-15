@@ -84,6 +84,10 @@
                 <span>Thông Báo</span>
                 <span class="badge" id="notif-badge" style="display:none">0</span>
             </button>
+            <button class="nav-item" data-view="settings" id="nav-settings">
+                <i class="fas fa-cog"></i>
+                <span>Cài Đặt</span>
+            </button>
         </div>
 
         <div class="sidebar-footer">
@@ -336,6 +340,62 @@
                 </div>
             </div>
         </section>
+
+        <!-- ══ Settings View ═══════════════════════ -->
+        <section id="view-settings" class="view">
+            <header class="view-header">
+                <div class="header-left">
+                    <button class="menu-toggle" id="menu-toggle-settings">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2><i class="fas fa-cog"></i> Cài Đặt</h2>
+                </div>
+            </header>
+
+            <div class="settings-content">
+                <!-- Account -->
+                <div class="settings-card">
+                    <h3><i class="fas fa-user"></i> Tài khoản</h3>
+                    <div class="settings-row">
+                        <span class="settings-label">Email</span>
+                        <span class="settings-value" id="settings-email">—</span>
+                    </div>
+                    <div class="settings-row">
+                        <span class="settings-label">Tên hiển thị</span>
+                        <span class="settings-value" id="settings-name">—</span>
+                    </div>
+                </div>
+
+                <!-- Notifications -->
+                <div class="settings-card">
+                    <h3><i class="fas fa-bell"></i> Thông báo giá</h3>
+                    <p class="settings-hint">Nhận cảnh báo khi giá sản phẩm theo dõi giảm hoặc chạm mục tiêu.</p>
+
+                    <div class="settings-row">
+                        <div class="settings-label-group">
+                            <span class="settings-label"><i class="fas fa-envelope"></i> Email</span>
+                            <span class="settings-sub" id="settings-email-status">Gửi tới email tài khoản của bạn</span>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="settings-notify-email">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="settings-field">
+                        <label for="settings-telegram"><i class="fab fa-telegram"></i> Telegram Chat ID</label>
+                        <span class="settings-sub">Để trống nếu không dùng. Lấy chat id bằng cách nhắn cho bot rồi mở <code>/getUpdates</code>.</span>
+                        <input type="text" id="settings-telegram" placeholder="vd: 123456789">
+                    </div>
+
+                    <div class="settings-channel-status" id="settings-channel-status"></div>
+
+                    <div id="settings-error" class="auth-error" style="display:none"></div>
+                    <div id="settings-success" class="settings-success" style="display:none"></div>
+                    <button id="btn-save-settings" class="auth-submit">Lưu cài đặt</button>
+                </div>
+            </div>
+        </section>
     </main>
 
     <script src="js/api.js"></script>
@@ -344,6 +404,7 @@
     <script src="js/dashboard.js"></script>
     <script src="js/notifications.js"></script>
     <script src="js/search.js"></script>
+    <script src="js/settings.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
