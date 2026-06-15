@@ -3,9 +3,22 @@ Tool: Web Search — Tim kiem san pham tren cac san TMDT Viet Nam.
 Uses DuckDuckGo search with site-specific queries for Vietnamese e-commerce.
 """
 import json
+import os
 import re
 import traceback
 from ddgs import DDGS
+
+from agent.tools.cache_util import TTLCache, RateLimiter
+
+
+# Cache search results for a short while so repeated/identical queries don't
+# re-hit DuckDuckGo, and rate-limit outbound calls to avoid HTTP 429 blocks.
+_SEARCH_TTL = float(os.environ.get("SEARCH_CACHE_TTL", "300"))      # 5 minutes
+_SEARCH_MAX_CALLS = int(os.environ.get("SEARCH_RATE_MAX_CALLS", "8"))
+_SEARCH_PERIOD = float(os.environ.get("SEARCH_RATE_PERIOD", "60"))   # per 60s
+
+_search_cache = TTLCache(ttl=_SEARCH_TTL, max_entries=256)
+_rate_limiter = RateLimiter(max_calls=_SEARCH_MAX_CALLS, period=_SEARCH_PERIOD)
 
 
 # Vietnamese e-commerce sites to search
@@ -80,6 +93,50 @@ def search_product(query: str, max_results: int = 10) -> str:
     Returns:
         JSON string chua danh sach ket qua tim kiem
     """
+    query = (query or "").strip()
+    if not query:
+        return json.dumps({
+            "success": False,
+            "message": "Vui long nhap tu khoa tim kiem.",
+            "results": []
+        }, ensure_ascii=False)
+
+    # 1) Serve from cache when possible (keyed by normalized query + max_results).
+    cache_key = f"{query.lower()}::{max_results}"
+    cached = _search_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    # 2) Rate-limit outbound search calls to avoid being blocked (HTTP 429).
+    if not _rate_limiter.acquire():
+        retry_after = round(_rate_limiter.time_until_next(), 1)
+        # If we have a stale cached entry, prefer returning it over an error.
+        stale = _search_cache.get(cache_key, allow_stale=True)
+        if stale is not None:
+            return stale
+        return json.dumps({
+            "success": False,
+            "query": query,
+            "rate_limited": True,
+            "message": f"Dang tim kiem qua nhanh. Vui long thu lai sau {retry_after}s.",
+            "results": []
+        }, ensure_ascii=False)
+
+    result_json = _do_search(query, max_results)
+
+    # 3) Only cache successful, non-empty responses.
+    try:
+        parsed = json.loads(result_json)
+        if parsed.get("success") and parsed.get("total_results", 0) > 0:
+            _search_cache.set(cache_key, result_json)
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    return result_json
+
+
+def _do_search(query: str, max_results: int = 10) -> str:
+    """Perform the actual DuckDuckGo search (no caching/rate-limiting)."""
     try:
         all_results = []
         seen_urls = set()

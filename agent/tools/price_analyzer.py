@@ -2,9 +2,62 @@
 Tool: Price Analyzer — Phân tích xu hướng giá sản phẩm.
 """
 import json
+import re
 import traceback
+import unicodedata
+
 from database.models import Product, PriceHistory
 from agent.context import get_current_user_id
+
+
+def _normalize(text: str) -> str:
+    """Lowercase, strip Vietnamese accents, collapse whitespace for matching."""
+    if not text:
+        return ""
+    text = unicodedata.normalize("NFD", text)
+    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
+    text = text.replace("đ", "d").replace("Đ", "d")
+    text = re.sub(r"[^a-z0-9\s]", " ", text.lower())
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _match_score(query: str, candidate: str) -> float:
+    """
+    Score how well `candidate` matches `query` (0..1).
+
+    Combines exact/substring bonus with token (word) overlap, so e.g.
+    "iPhone 16 Pro" ranks above "iPhone 16" when the query mentions "Pro".
+    """
+    q = _normalize(query)
+    c = _normalize(candidate)
+    if not q or not c:
+        return 0.0
+    if q == c:
+        return 1.0
+
+    q_tokens = set(q.split())
+    c_tokens = set(c.split())
+    if not q_tokens or not c_tokens:
+        return 0.0
+
+    overlap = q_tokens & c_tokens
+    # Jaccard-like overlap weighted toward covering the query's tokens.
+    coverage = len(overlap) / len(q_tokens)
+    jaccard = len(overlap) / len(q_tokens | c_tokens)
+    score = 0.6 * coverage + 0.4 * jaccard
+
+    # Substring bonus — query appears verbatim in candidate (or vice versa).
+    if q in c or c in q:
+        score = max(score, 0.85)
+    return score
+
+
+def _rank_matches(query: str, products: list) -> list:
+    """Return products sorted by descending match score (only score > 0)."""
+    scored = [(p, _match_score(query, p.get("name", ""))) for p in products]
+    scored = [(p, s) for p, s in scored if s > 0]
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return scored
 
 
 def analyze_price(product_name: str) -> str:
@@ -18,14 +71,34 @@ def analyze_price(product_name: str) -> str:
         JSON string chứa phân tích giá
     """
     try:
-        products = Product.search_by_name(product_name, user_id=get_current_user_id())
-        if not products:
+        user_id = get_current_user_id()
+        # Search the user's whole watchlist, then rank by match quality rather
+        # than relying on a raw LIKE and taking the first row.
+        candidates = Product.get_all(user_id=user_id)
+        ranked = _rank_matches(product_name, candidates)
+
+        if not ranked:
             return json.dumps({
                 "success": False,
                 "message": f"Không tìm thấy sản phẩm '{product_name}' trong danh sách theo dõi."
             }, ensure_ascii=False)
 
-        product = products[0]
+        best, best_score = ranked[0]
+
+        # Ambiguous: several products match almost equally well → ask the user
+        # to disambiguate instead of silently guessing.
+        close = [p for p, s in ranked if best_score - s <= 0.1]
+        if len(close) > 1 and best_score < 1.0:
+            return json.dumps({
+                "success": False,
+                "ambiguous": True,
+                "message": (f"Có {len(close)} sản phẩm khớp với '{product_name}'. "
+                            "Bạn muốn phân tích sản phẩm nào?"),
+                "matches": [{"id": p["id"], "name": p["name"],
+                             "current_price": p.get("current_price")} for p in close],
+            }, ensure_ascii=False)
+
+        product = best
         stats = PriceHistory.get_stats(product["id"])
         history = PriceHistory.get_by_product(product["id"])
 
