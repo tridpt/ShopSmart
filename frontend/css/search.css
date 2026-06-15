@@ -51,6 +51,10 @@
 /* Results Grid */
 .search-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 
+/* An empty-state / placeholder shouldn't sit in a single grid cell — let it
+   span the full row so its content stays centered. */
+.search-results .empty-state { grid-column: 1 / -1; }
+
 /* Product Card */
 .product-card {
     background: var(--bg-surface); border: 1px solid var(--border-color);
