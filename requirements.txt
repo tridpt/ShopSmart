@@ -12,4 +12,4 @@ PyJWT>=2.8
 waitress>=3.0
 
 # Dev / testing
-pytest>=8.0
+pytest>=9.1.0
