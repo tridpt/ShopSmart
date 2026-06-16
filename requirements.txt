@@ -1,5 +1,5 @@
 flask>=3.0
-flask-cors>=4.0
+flask-cors>=6.0.5
 google-genai>=1.0
 requests>=2.31
 beautifulsoup4>=4.12
