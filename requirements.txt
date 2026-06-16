@@ -6,7 +6,7 @@ beautifulsoup4>=4.12
 lxml>=5.0
 ddgs>=9.0
 bcrypt>=4.0
-PyJWT>=2.8
+PyJWT>=2.13.0
 
 # Production WSGI server
 waitress>=3.0
