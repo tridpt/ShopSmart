@@ -9,7 +9,7 @@ bcrypt>=5.0.0
 PyJWT>=2.13.0
 
 # Production WSGI server
-waitress>=3.0
+waitress>=3.0.2
 
 # Dev / testing
 pytest>=9.1.0
