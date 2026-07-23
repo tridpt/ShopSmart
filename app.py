@@ -1,9 +1,11 @@
 """
 ShopSmart AI — Flask API Server
 """
+import logging
 import os
 import re
 import sys
+import uuid
 
 # Fix Windows console encoding for Vietnamese text
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -75,6 +77,39 @@ def _safe_user(user: dict) -> dict:
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+logger = logging.getLogger("shopsmart")
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+
+def _server_error(exc, status=500):
+    """Log an unexpected error server-side and return a generic client message.
+
+    Never leak exception details (which may expose internals/paths) to the
+    client; instead return a short correlation id the user can quote in reports.
+    """
+    error_id = uuid.uuid4().hex[:12]
+    logger.error(
+        "Unhandled error [%s] on %s %s",
+        error_id, request.method, request.path, exc_info=exc,
+    )
+    return jsonify({
+        "error": "Đã xảy ra lỗi trong hệ thống. Vui lòng thử lại sau.",
+        "error_id": error_id,
+    }), status
+
+
+@app.errorhandler(Exception)
+def _handle_uncaught(exc):
+    """Safety net: convert any uncaught exception into a sanitized 500."""
+    from werkzeug.exceptions import HTTPException
+    if isinstance(exc, HTTPException):
+        return exc  # preserve intended 4xx/5xx responses (404, 405, ...)
+    return _server_error(exc)
+
 
 # ── Frontend Routes ─────────────────────────────────────────
 @app.route("/")
@@ -106,7 +141,7 @@ def register():
         token = create_jwt(user_id)
         return jsonify({"token": token, "user": _safe_user(User.get_by_id(user_id))})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 @app.route("/api/auth/login", methods=["POST"])
@@ -125,7 +160,7 @@ def login():
         token = create_jwt(user["id"])
         return jsonify({"token": token, "user": _safe_user(user)})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 @app.route("/api/auth/me", methods=["GET"])
@@ -148,7 +183,7 @@ def update_settings():
             User.set_push_subscription(g.user_id, chat_id)
         return jsonify({"user": _safe_user(User.get_by_id(g.user_id))})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 # ── Chat API ────────────────────────────────────────────────
@@ -178,18 +213,24 @@ def chat():
         })
 
     except ValueError as e:
+        # Controlled configuration/validation error (e.g. missing API key).
+        # Log the detail server-side; tell the user the assistant is unavailable.
+        logger.warning("Chat unavailable on %s: %s", request.path, e)
         return jsonify({
-            "response": str(e),
+            "response": "Trợ lý AI hiện chưa sẵn sàng. Vui lòng thử lại sau.",
             "tool_calls": [],
-            "error": str(e),
+            "error": "ai_unavailable",
         }), 200
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        error_id = uuid.uuid4().hex[:12]
+        logger.error(
+            "Chat error [%s] on %s", error_id, request.path, exc_info=e,
+        )
         return jsonify({
-            "response": f"Loi: {str(e)}",
+            "response": "Xin lỗi, hệ thống gặp sự cố khi xử lý tin nhắn. Vui lòng thử lại.",
             "tool_calls": [],
-            "error": str(e),
+            "error": "internal_error",
+            "error_id": error_id,
         }), 200
 
 
@@ -201,7 +242,7 @@ def chat_history():
         history = ChatHistory.get_recent(50, user_id=g.user_id)
         return jsonify({"history": history})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 @app.route("/api/chat/clear", methods=["POST"])
@@ -215,7 +256,7 @@ def clear_chat():
             agent.reset_chat()
         return jsonify({"success": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 # ── Product Tracking API ────────────────────────────────────
@@ -227,7 +268,7 @@ def get_tracked():
         products = Product.get_all(user_id=g.user_id)
         return jsonify({"products": products})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 @app.route("/api/tracked/<int:product_id>", methods=["DELETE"])
@@ -240,7 +281,7 @@ def delete_tracked(product_id):
         Product.delete(product_id)
         return jsonify({"success": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 @app.route("/api/tracked/<int:product_id>/target", methods=["PUT"])
@@ -265,7 +306,7 @@ def update_target(product_id):
         Product.update_target_price(product_id, target)
         return jsonify({"success": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 @app.route("/api/track", methods=["POST"])
@@ -310,7 +351,7 @@ def track_product():
         )
         return jsonify({"success": True, "product_id": product_id})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 @app.route("/api/tracked/export", methods=["GET"])
@@ -346,7 +387,7 @@ def export_tracked():
             },
         )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 # ── Price History API ────────────────────────────────────────
@@ -361,7 +402,7 @@ def price_history(product_id):
         stats = PriceHistory.get_stats(product_id)
         return jsonify({"history": history, "stats": stats})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 # ── Notifications API ────────────────────────────────────────
@@ -374,7 +415,7 @@ def get_notifications():
         unread = len([n for n in notifications if not n["is_read"]])
         return jsonify({"notifications": notifications, "unread_count": unread})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 @app.route("/api/notifications/read", methods=["POST"])
@@ -385,7 +426,7 @@ def mark_notifications_read():
         Notification.mark_all_read(user_id=g.user_id)
         return jsonify({"success": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 # ── Price Monitor API ────────────────────────────────────────
@@ -398,7 +439,7 @@ def refresh_prices():
         updated = price_monitor.run_once(user_id=g.user_id)
         return jsonify({"success": True, "updated": updated})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 # ── Direct Search API (no AI needed) ────────────────────────
@@ -418,7 +459,7 @@ def direct_search():
         result = json.loads(result_json)
         return jsonify(result)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 # ── Price Scraper API (no AI needed) ─────────────────────────
@@ -447,7 +488,7 @@ def scrape_price_api():
 
         return jsonify(result)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 # ── Price Comparison API (gom giá đa sàn) ───────────────────
@@ -522,7 +563,7 @@ def compare_prices():
             "offers": ordered,
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 # ── Health Check ─────────────────────────────────────────────
