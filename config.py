@@ -76,6 +76,25 @@ SMTP_USER = os.environ.get("SMTP_USER", "").strip()
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "").strip()
 SMTP_FROM = os.environ.get("SMTP_FROM", "").strip() or SMTP_USER
 
+# ── Rate limiting ───────────────────────────────────────────
+# Bảo vệ các endpoint tốn tài nguyên (auth brute-force, chi phí Gemini, scrape).
+# In-process token bucket; khi chạy nhiều worker nên dùng store dùng chung.
+RATE_LIMIT_ENABLED = _env_bool("RATE_LIMIT_ENABLED", True)
+
+
+def _env_int(key: str, default: int) -> int:
+    try:
+        return int(os.environ.get(key, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+# (limit, per_seconds) cho từng nhóm endpoint.
+RATE_LIMIT_AUTH = (_env_int("RATE_LIMIT_AUTH", 10), 60.0)          # login/register
+RATE_LIMIT_CHAT = (_env_int("RATE_LIMIT_CHAT", 20), 60.0)          # Gemini chat
+RATE_LIMIT_SEARCH = (_env_int("RATE_LIMIT_SEARCH", 30), 60.0)      # search/scrape/compare
+RATE_LIMIT_REFRESH = (_env_int("RATE_LIMIT_REFRESH", 6), 60.0)     # làm mới giá thủ công
+
 # ── Agent ───────────────────────────────────────────────────
 MAX_AGENT_ITERATIONS = 10
 

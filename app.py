@@ -24,6 +24,7 @@ from auth import (
     login_required, current_user_id, create_jwt,
     hash_password, verify_password,
 )
+from ratelimit import rate_limit
 
 # ── Flask App ───────────────────────────────────────────────
 app = Flask(
@@ -79,6 +80,7 @@ def index():
 
 # ── Auth API ────────────────────────────────────────────────
 @app.route("/api/auth/register", methods=["POST"])
+@rate_limit("auth", *config.RATE_LIMIT_AUTH)
 def register():
     """Register a new account."""
     try:
@@ -104,6 +106,7 @@ def register():
 
 
 @app.route("/api/auth/login", methods=["POST"])
+@rate_limit("auth", *config.RATE_LIMIT_AUTH)
 def login():
     """Login with email and password."""
     try:
@@ -147,6 +150,7 @@ def update_settings():
 # ── Chat API ────────────────────────────────────────────────
 @app.route("/api/chat", methods=["POST"])
 @login_required
+@rate_limit("chat", *config.RATE_LIMIT_CHAT)
 def chat():
     """Send a message to the AI agent."""
     try:
@@ -383,6 +387,7 @@ def mark_notifications_read():
 # ── Price Monitor API ────────────────────────────────────────
 @app.route("/api/refresh-prices", methods=["POST"])
 @login_required
+@rate_limit("refresh", *config.RATE_LIMIT_REFRESH)
 def refresh_prices():
     """Trigger an immediate price re-check for the user's tracked products."""
     try:
@@ -395,6 +400,7 @@ def refresh_prices():
 # ── Direct Search API (no AI needed) ────────────────────────
 @app.route("/api/search", methods=["GET"])
 @login_required
+@rate_limit("search", *config.RATE_LIMIT_SEARCH)
 def direct_search():
     """Search products directly without Gemini AI."""
     try:
@@ -414,6 +420,7 @@ def direct_search():
 # ── Price Scraper API (no AI needed) ─────────────────────────
 @app.route("/api/scrape-price", methods=["POST"])
 @login_required
+@rate_limit("search", *config.RATE_LIMIT_SEARCH)
 def scrape_price_api():
     """Scrape real price from a product URL."""
     try:
@@ -442,6 +449,7 @@ def scrape_price_api():
 # ── Price Comparison API (gom giá đa sàn) ───────────────────
 @app.route("/api/compare", methods=["GET"])
 @login_required
+@rate_limit("search", *config.RATE_LIMIT_SEARCH)
 def compare_prices():
     """
     Search a product, scrape prices from each source, group them into one
