@@ -86,6 +86,9 @@ Copy `.env.example` to `.env` and fill in what you need. Only `GEMINI_API_KEY` i
 | `TELEGRAM_BOT_TOKEN` | Enable Telegram price alerts |
 | `SMTP_HOST` / `SMTP_USER` / `SMTP_PASSWORD` | Enable email price alerts |
 | `SERVE_THREADS` | Waitress worker threads (default 8) |
+| `CORS_ORIGINS` | Comma-separated origins allowed to call the API. Empty = same-origin only (default). Set only when the frontend is hosted on a separate domain. |
+| `RATE_LIMIT_ENABLED` | `false` to disable API rate limiting (default on) |
+| `RATE_LIMIT_AUTH` / `RATE_LIMIT_CHAT` / `RATE_LIMIT_SEARCH` / `RATE_LIMIT_REFRESH` | Max requests per 60s per client for each endpoint group |
 
 ## Deployment
 

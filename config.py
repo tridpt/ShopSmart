@@ -95,6 +95,15 @@ RATE_LIMIT_CHAT = (_env_int("RATE_LIMIT_CHAT", 20), 60.0)          # Gemini chat
 RATE_LIMIT_SEARCH = (_env_int("RATE_LIMIT_SEARCH", 30), 60.0)      # search/scrape/compare
 RATE_LIMIT_REFRESH = (_env_int("RATE_LIMIT_REFRESH", 6), 60.0)     # làm mới giá thủ công
 
+# ── CORS ────────────────────────────────────────────────────
+# Danh sách origin được phép gọi API, phân tách bằng dấu phẩy.
+# Frontend được Flask phục vụ cùng origin nên mặc định KHÔNG mở CORS.
+# Chỉ đặt khi frontend deploy ở domain khác backend.
+# Ví dụ: CORS_ORIGINS=https://shopsmart.example.com,https://www.shopsmart.example.com
+CORS_ORIGINS = [
+    o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()
+]
+
 # ── Agent ───────────────────────────────────────────────────
 MAX_AGENT_ITERATIONS = 10
 

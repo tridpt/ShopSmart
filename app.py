@@ -32,7 +32,11 @@ app = Flask(
     static_folder="frontend",
     static_url_path="",
 )
-CORS(app)
+# The frontend is served same-origin by Flask, so cross-origin access is off by
+# default. Set CORS_ORIGINS only when hosting the frontend on a separate domain.
+if config.CORS_ORIGINS:
+    CORS(app, resources={r"/api/*": {"origins": config.CORS_ORIGINS}},
+         supports_credentials=True)
 
 # ── Initialize ──────────────────────────────────────────────
 init_db()
