@@ -1,0 +1,6 @@
+# Development / testing dependencies.
+# Installs the pinned runtime deps plus test tooling:
+#   pip install -r requirements-dev.txt
+-r requirements.txt
+
+pytest==9.1.1

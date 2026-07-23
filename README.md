@@ -43,8 +43,16 @@ AI-powered shopping assistant that helps you find the best deals, compare prices
 ```bash
 git clone https://github.com/YOUR_USERNAME/ShopSmart.git
 cd ShopSmart
+
+# runtime only
 pip install -r requirements.txt
+
+# or, for development + running the tests
+pip install -r requirements-dev.txt
 ```
+
+Tip: use a virtual environment (`python -m venv .venv`) so ShopSmart's pinned
+dependencies stay isolated from other projects.
 
 ### 2. Set API Key
 
@@ -119,6 +127,7 @@ Always set `JWT_SECRET` to a fixed value in production so tokens survive restart
 ## Testing
 
 ```bash
+pip install -r requirements-dev.txt
 pytest
 ```
 
