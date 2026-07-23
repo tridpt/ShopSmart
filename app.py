@@ -5,7 +5,10 @@ import logging
 import os
 import re
 import sys
+import threading
+import time
 import uuid
+from collections import OrderedDict
 
 # Fix Windows console encoding for Vietnamese text
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -50,16 +53,50 @@ if config.PRICE_MONITOR_IN_PROCESS:
     price_monitor.start_monitor()
 
 # Per-user agent sessions (each user gets an isolated chat context).
-_agents = {}
+# Bounded LRU + TTL cache so idle/abandoned sessions are evicted instead of
+# growing memory without limit.
+class _AgentCache:
+    def __init__(self, max_size: int, ttl_seconds: int):
+        self._max_size = max(1, max_size)
+        self._ttl = ttl_seconds
+        self._store: "OrderedDict[object, tuple[object, float]]" = OrderedDict()
+        self._lock = threading.Lock()
+
+    def _fresh(self, ts: float) -> bool:
+        return self._ttl <= 0 or (time.monotonic() - ts) <= self._ttl
+
+    def get(self, key):
+        """Return the cached agent if present and not expired, else None."""
+        with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            agent, ts = entry
+            if not self._fresh(ts):
+                del self._store[key]
+                return None
+            self._store.move_to_end(key)
+            return agent
+
+    def get_or_create(self, key, factory):
+        agent = self.get(key)
+        if agent is not None:
+            return agent
+        agent = factory()
+        with self._lock:
+            self._store[key] = (agent, time.monotonic())
+            self._store.move_to_end(key)
+            while len(self._store) > self._max_size:
+                self._store.popitem(last=False)  # evict least-recently-used
+        return agent
+
+
+_agents = _AgentCache(config.AGENT_CACHE_MAX, config.AGENT_CACHE_TTL)
 
 
 def get_agent(user_id):
     """Lazy-init a per-user agent (so missing API key doesn't crash startup)."""
-    agent = _agents.get(user_id)
-    if agent is None:
-        agent = ShopSmartAgent()
-        _agents[user_id] = agent
-    return agent
+    return _agents.get_or_create(user_id, ShopSmartAgent)
 
 
 def _safe_user(user: dict) -> dict:
