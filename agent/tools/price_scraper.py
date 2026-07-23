@@ -13,7 +13,7 @@ Chiến lược trích giá (theo thứ tự ưu tiên, dừng ở phương phá
 import json
 import re
 import traceback
-import requests
+from agent.tools import safe_http as requests
 from bs4 import BeautifulSoup
 
 
